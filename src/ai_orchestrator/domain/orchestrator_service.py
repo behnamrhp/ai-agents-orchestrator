@@ -4,10 +4,13 @@ OrchestratorService definition in its own module.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from .models import IssueEntity, IssueEventDTO
 from .repositories import LlmRepository
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -98,22 +101,99 @@ class OrchestratorService:
         """
         Handle a newly created issue event.
 
-        Will map the DTO to a domain IssueEntity and delegate to the LLM repository.
+        Per the sequence diagram:
+        1. Map DTO → domain Issue (already done via event.issue)
+        2. Delegate to assignAgent(domainIssue)
+
+        Args:
+            event: The issue created event DTO
         """
-        # TODO: implement issue-created business rules
         issue = event.issue
+        logger.info("Handling issue created event for issue %s", issue.key)
+
+        # Map DTO to domain Issue (already done - event.issue is IssueEntity)
+        # Delegate to assignAgent
         base_prompt = "Please review and work on this newly created Jira issue."
         self.assign_agent(issue=issue, prompt=base_prompt)
+
+        logger.info("Successfully assigned agent for created issue %s", issue.key)
 
     def handle_issue_updated(self, event: IssueEventDTO) -> None:
         """
         Handle an updated issue event.
 
-        Will apply domain rules before delegating to the LLM repository.
+        Per the sequence diagram:
+        1. Apply domain rules (status/label checks, etc.)
+        2. Delegate to assignAgent(domainIssue)
+
+        Domain rules applied:
+        - Only process issues that are not already in "to approve" or "done" status
+        - Only process issues with certain labels (if configured)
+        - Skip if issue is in a terminal state
+
+        Args:
+            event: The issue updated event DTO
         """
-        # TODO: implement issue-updated business rules
         issue = event.issue
+        logger.info("Handling issue updated event for issue %s (status: %s)", issue.key, issue.status)
+
+        # Apply domain rules: status/label checks
+        if not self._should_process_issue(issue):
+            logger.info(
+                "Skipping agent assignment for issue %s due to domain rules (status: %s)",
+                issue.key,
+                issue.status,
+            )
+            return
+
+        # Domain rules passed - delegate to assignAgent
         base_prompt = "Please review and work on this updated Jira issue."
         self.assign_agent(issue=issue, prompt=base_prompt)
+
+        logger.info("Successfully assigned agent for updated issue %s", issue.key)
+
+    def _should_process_issue(self, issue: IssueEntity) -> bool:
+        """
+        Apply domain rules to determine if an issue should be processed.
+
+        Rules:
+        - Skip issues in terminal states ("done", "closed", "resolved")
+        - Skip issues already in "to approve" status (work already completed)
+        - Can be extended with label-based filtering
+
+        Args:
+            issue: The issue to check
+
+        Returns:
+            True if the issue should be processed, False otherwise
+        """
+        # Normalize status for comparison
+        status_lower = issue.status.lower()
+
+        # Skip terminal states
+        terminal_states = {"done", "closed", "resolved", "cancelled"}
+        if status_lower in terminal_states:
+            logger.debug(
+                "Issue %s is in terminal state '%s' - skipping",
+                issue.key,
+                issue.status,
+            )
+            return False
+
+        # Skip if already in "to approve" status (work completed, waiting for review)
+        if "approve" in status_lower or "review" in status_lower:
+            logger.debug(
+                "Issue %s is already in approval/review state '%s' - skipping",
+                issue.key,
+                issue.status,
+            )
+            return False
+
+        # Additional domain rules can be added here:
+        # - Label-based filtering
+        # - Project-based filtering
+        # - Custom status workflows
+
+        return True
 
 
