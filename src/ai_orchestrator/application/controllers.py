@@ -7,8 +7,10 @@ These are thin wrappers that adapt FastAPI requests into domain calls.
 from __future__ import annotations
 
 import logging
+import os
+import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict
 
 from ai_orchestrator.domain.models import IssueEventDTO, IssueEntity
 from ai_orchestrator.domain.services import OrchestratorService, McpStartupService
@@ -61,6 +63,148 @@ class IssueController:
     orchestrator_service: OrchestratorService
     mcp_startup_service: McpStartupService
 
+    @staticmethod
+    def _extract_project_identifier(summary: str, labels: List[str]) -> Optional[str]:
+        """
+        Extract project identifier from issue summary or labels.
+
+        Looks for patterns like `[backend]` or `[web-front]` in the issue summary.
+        Falls back to checking labels if no bracket pattern is found.
+
+        Args:
+            summary: The issue summary/title
+            labels: List of issue labels
+
+        Returns:
+            Project identifier (normalized to uppercase with underscores) or None
+        """
+        if not summary:
+            summary = ""
+
+        # Pattern: [identifier] at the start of summary
+        # Example: "[backend] Add authentication" -> "backend"
+        bracket_pattern = r"^\[([^\]]+)\]\s*"
+        match = re.match(bracket_pattern, summary.strip())
+        if match:
+            identifier = match.group(1).strip()
+            logger.debug("Extracted project identifier '%s' from summary pattern", identifier)
+            return IssueController._normalize_identifier(identifier)
+
+        # Fallback: check labels for common project identifiers
+        # Look for labels that might indicate project (e.g., "backend", "frontend", "api")
+        for label in labels:
+            if label and isinstance(label, str):
+                normalized = IssueController._normalize_identifier(label)
+                # Check if there's an env var for this identifier
+                env_var = f"PROJECT_REPO_{normalized}"
+                if os.getenv(env_var):
+                    logger.debug("Found project identifier '%s' from label '%s'", normalized, label)
+                    return normalized
+
+        logger.debug("No project identifier found in summary or labels")
+        return None
+
+    @staticmethod
+    def _normalize_identifier(identifier: str) -> str:
+        """
+        Normalize project identifier for environment variable lookup.
+
+        Converts to uppercase and replaces hyphens with underscores.
+        Example: "web-front" -> "WEB_FRONT"
+
+        Args:
+            identifier: The raw project identifier
+
+        Returns:
+            Normalized identifier suitable for env var lookup
+        """
+        return identifier.upper().replace("-", "_").replace(" ", "_")
+
+    @staticmethod
+    def _lookup_env_url(env_var_name: str) -> Optional[str]:
+        """
+        Look up an environment variable and return its value if set.
+
+        Args:
+            env_var_name: The environment variable name
+
+        Returns:
+            The environment variable value or None if not set
+        """
+        value = os.getenv(env_var_name)
+        if value:
+            logger.debug("Found environment variable %s=%s", env_var_name, value)
+            return value.strip()
+        return None
+
+    def _map_team_document_urls(
+        self, project_identifier: Optional[str]
+    ) -> Dict[str, Optional[str]]:
+        """
+        Map team document URLs based on project identifier and environment variables.
+
+        Looks up the following environment variables:
+        - PROJECT_REPO_{PROJECT_IDENTIFIER}
+        - TEAM_CONTRIBUTION_RULES_URL_{PROJECT_IDENTIFIER}
+        - ARCHITECTURE_RULES_URL_{PROJECT_IDENTIFIER}
+        - PRD_URL_{PROJECT_IDENTIFIER} (optional)
+        - ARD_URL_{PROJECT_IDENTIFIER} (optional)
+
+        Args:
+            project_identifier: The normalized project identifier (e.g., "BACKEND")
+
+        Returns:
+            Dictionary with mapped URLs:
+            - project_repo_url
+            - team_contribution_rules_url
+            - team_architecture_rules_url
+            - prd_url
+            - ard_url
+        """
+        urls = {
+            "project_repo_url": None,
+            "team_contribution_rules_url": None,
+            "team_architecture_rules_url": None,
+            "prd_url": None,
+            "ard_url": None,
+        }
+
+        if not project_identifier:
+            logger.debug("No project identifier provided, skipping URL mapping")
+            return urls
+
+        # Map repository URL
+        repo_env_var = f"PROJECT_REPO_{project_identifier}"
+        urls["project_repo_url"] = self._lookup_env_url(repo_env_var)
+
+        # Map team contribution rules URL
+        contribution_env_var = f"TEAM_CONTRIBUTION_RULES_URL_{project_identifier}"
+        urls["team_contribution_rules_url"] = self._lookup_env_url(contribution_env_var)
+
+        # Map architecture rules URL
+        architecture_env_var = f"ARCHITECTURE_RULES_URL_{project_identifier}"
+        urls["team_architecture_rules_url"] = self._lookup_env_url(architecture_env_var)
+
+        # Map PRD URL (optional)
+        prd_env_var = f"PRD_URL_{project_identifier}"
+        urls["prd_url"] = self._lookup_env_url(prd_env_var)
+
+        # Map ARD URL (optional)
+        ard_env_var = f"ARD_URL_{project_identifier}"
+        urls["ard_url"] = self._lookup_env_url(ard_env_var)
+
+        logger.info(
+            "Mapped URLs for project '%s': repo=%s, contribution=%s, architecture=%s, prd=%s, ard=%s",
+            project_identifier,
+            bool(urls["project_repo_url"]),
+            bool(urls["team_contribution_rules_url"]),
+            bool(urls["team_architecture_rules_url"]),
+            bool(urls["prd_url"]),
+            bool(urls["ard_url"]),
+        )
+
+        return urls
+
     def _map_jira_payload_to_issue_entity(self, jira_issue: JiraIssue) -> IssueEntity:
         """
         Map Jira webhook payload to domain IssueEntity.
@@ -102,10 +246,11 @@ class IssueController:
         # Extract summary
         summary = fields.get("summary", "") or ""
 
-        # Note: Additional URLs (project_repo_url, prd_url, etc.) are not in the
-        # standard Jira webhook payload. These would need to be extracted from
-        # custom fields or the description if they're embedded there.
-        # For now, we leave them as None and they can be populated later if needed.
+        # Extract project identifier from summary or labels
+        project_identifier = self._extract_project_identifier(summary, labels)
+
+        # Map team document URLs based on project identifier
+        url_mapping = self._map_team_document_urls(project_identifier)
 
         return IssueEntity(
             id=jira_issue.get("id", ""),
@@ -115,11 +260,11 @@ class IssueController:
             labels=labels,
             summary=summary,
             description=description,
-            project_repo_url=None,  # Not in standard webhook payload
-            team_contribution_rules_url=None,  # Not in standard webhook payload
-            team_architecture_rules_url=None,  # Not in standard webhook payload
-            prd_url=None,  # Not in standard webhook payload
-            ard_url=None,  # Not in standard webhook payload
+            project_repo_url=url_mapping["project_repo_url"],
+            team_contribution_rules_url=url_mapping["team_contribution_rules_url"],
+            team_architecture_rules_url=url_mapping["team_architecture_rules_url"],
+            prd_url=url_mapping["prd_url"],
+            ard_url=url_mapping["ard_url"],
         )
 
     def handle_issue_created(self, payload: JiraIssueWebhookPayload) -> None:
