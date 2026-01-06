@@ -8,10 +8,6 @@ The workflow enables automatic task assignment and review through Jira webhooks.
 
 ## Sequence Diagram
 
-> **Note**: This PlantUML diagram can be viewed using:
-> - [PlantUML Online Server](http://www.plantuml.com/plantuml/uml/)
-> - VS Code extension: "PlantUML"
-> - Local PlantUML installation
 
 ```plantuml
 @startuml
@@ -35,15 +31,15 @@ participant "Architecture Agent\n(OpenHands)" as ArchAgent
 
 == Task Assignment Phase ==
 
-Human -> Jira: Move task to "Selected for Dev"\n(Project: "ai-backend", "ai-web-front", etc.)
+Human -> Jira: Move task to "Selected for Dev"\n(Label: "ai" on issue)
 activate Jira
 
-Jira -> Orchestrator: Webhook: Issue moved to "Selected for Dev"\n(issue_key, project_key, description)
+Jira -> Orchestrator: Webhook: Issue status/column changed\n(issue_key, project_key, status, labels, description)
 activate Orchestrator
 
-Orchestrator -> Orchestrator: Check if project/team\nstarts with "ai"
+Orchestrator -> Orchestrator: Check if status is "Selected for Dev"\nand issue has label "ai"
 
-alt Project name starts with "ai"
+alt Issue in "Selected for Dev" AND has label "ai"
     Orchestrator -> Orchestrator: Identify agent type\n(backend/web-front/app-front)
     
     Orchestrator -> Jira: Fetch issue title via MCP\nto extract project identifier
@@ -147,7 +143,7 @@ alt Project name starts with "ai"
         deactivate Orchestrator
     end
     
-else Project name does NOT start with "ai"
+else Issue NOT in "Selected for Dev" OR missing label "ai"
     Orchestrator -> Orchestrator: Ignore (human task)
     note right of Orchestrator: No AI agent assigned
     deactivate Orchestrator
@@ -214,16 +210,16 @@ Human -> Jira: Final approval/rejection
 
 ### Workflow Steps
 
-1. **Human Action**: Moves task to "Selected for Dev" column
-   - Project name must start with "ai" (e.g., `ai-backend`, `ai-web-front`)
+1. **Human Action**: Moves task to "Selected for Dev" column and adds `ai` label to the issue
 
 2. **Webhook Trigger**: Jira sends webhook to Orchestrator
-   - Event: Issue moved to "Selected for Dev"
-   - Payload: Issue key, project key, description
+   - Event: Issue status/column changed
+   - Payload: Issue key, project key, status/column, labels, description
 
 3. **Orchestrator Processing**:
-   - Checks if project name starts with "ai"
-   - Identifies agent type from project name
+   - Checks if status/column is "Selected for Dev"
+   - Checks if issue has `ai` label
+   - Identifies agent type (e.g., from project name or other conventions)
    - **Extracts project identifier from issue title**:
      - Pattern: `[project]` in issue title (e.g., "[backend] Add authentication")
      - Extracts project identifier: "backend"
@@ -314,87 +310,86 @@ Approved
 import os
 
 def handle_webhook(event):
-    if event.column == "Selected for Dev":
+    # Only handle when moved into "Selected for Dev" AND labeled for AI
+    if event.column == "Selected for Dev" and "ai" in (event.labels or []):
         project_key = event.project_key
         
-        # Check if project/team name starts with "ai"
-        if project_key.startswith("ai"):
-            # Determine agent type from project name
-            agent_type = determine_agent_type(project_key)
-            # agent_type: "backend", "web-front", "app-front"
+        # Determine agent type (e.g., from project name or other convention)
+        agent_type = determine_agent_type(project_key)
+        # agent_type: "backend", "web-front", "app-front"
+        
+        # Extract project identifier from issue title (format: [project])
+        import re
+        issue_title = event.title or event.summary
+        project_match = re.search(r'\[([^\]]+)\]', issue_title)
+        project_identifier = project_match.group(1) if project_match else None
+        
+        # Map project identifier to repository URL from environment variables
+        # Format: PROJECT_REPO_{project_identifier}
+        if project_identifier:
+            project_env_key = project_identifier.upper().replace('-', '_')
+            repo_env_var = f"PROJECT_REPO_{project_env_key}"
+            repository_url = os.getenv(repo_env_var)
             
-            # Extract project identifier from issue title (format: [project])
-            import re
-            issue_title = event.title or event.summary
-            project_match = re.search(r'\[([^\]]+)\]', issue_title)
-            project_identifier = project_match.group(1) if project_match else None
+            # Map project to team contribution rules
+            team_rules_env_var = f"TEAM_CONTRIBUTION_RULES_{project_env_key}"
+            team_rules = os.getenv(team_rules_env_var)
             
-            # Map project identifier to repository URL from environment variables
-            # Format: PROJECT_REPO_{project_identifier}
-            if project_identifier:
-                project_env_key = project_identifier.upper().replace('-', '_')
-                repo_env_var = f"PROJECT_REPO_{project_env_key}"
-                repository_url = os.getenv(repo_env_var)
-                
-                # Map project to team contribution rules
-                team_rules_env_var = f"TEAM_CONTRIBUTION_RULES_{project_env_key}"
-                team_rules = os.getenv(team_rules_env_var)
-                
-                # Map project to architecture rules
-                architecture_rules_url_env_var = f"ARCHITECTURE_RULES_URL_{project_env_key}"
-                architecture_rules_env_var = f"ARCHITECTURE_RULES_{project_env_key}"
-                architecture_rules_url = os.getenv(architecture_rules_url_env_var)
-                architecture_rules = os.getenv(architecture_rules_env_var)
-            else:
-                repository_url = None
-                team_rules = None
-                architecture_rules_url = None
-                architecture_rules = None
-            
-            # Fetch ARD and PRD from Confluence (Document Center) via MCP
-            ard = fetch_confluence_page(
-                space="ARCHITECTURE",
-                title=f"ARD - {project_key}"
-            )
-            
-            prd = fetch_confluence_page(
-                space="PRODUCT",
-                title=f"PRD - {event.issue_key}"
-            ) or fetch_confluence_page_by_link(event.issue_key)
-            
-            # Compile full context with role definition
-            task_description = f"""
-            Role: Development Agent
-            You are a development agent responsible for implementing features and fixes 
-            according to team standards and architecture requirements.
-            
-            Handle Jira issue: {event.issue_key}
-            
-            Task Description:
-            {event.description}
-            
-            Repository URL:
-            {repository_url or "Not specified - check issue title format [project]"}
-            
-            Team Contribution Rules:
-            {team_rules}
-            
-            Architecture Rules:
-            URL: {architecture_rules_url}
-            {architecture_rules}
-            
-            Architecture Requirements Document (ARD):
-            {ard}
-            
-            Product Requirements Document (PRD):
-            {prd}
-            
-            Follow all rules and requirements strictly. Work in the repository: {repository_url}
-            Create a Pull Request after implementation and link it to the Jira issue.
-            """
-            
-            # Assign to appropriate agent with full context and role definition
-            assign_to_agent(agent_type, task_description)
+            # Map project to architecture rules
+            architecture_rules_url_env_var = f"ARCHITECTURE_RULES_URL_{project_env_key}"
+            architecture_rules_env_var = f"ARCHITECTURE_RULES_{project_env_key}"
+            architecture_rules_url = os.getenv(architecture_rules_url_env_var)
+            architecture_rules = os.getenv(architecture_rules_env_var)
+        else:
+            repository_url = None
+            team_rules = None
+            architecture_rules_url = None
+            architecture_rules = None
+        
+        # Fetch ARD and PRD from Confluence (Document Center) via MCP
+        ard = fetch_confluence_page(
+            space="ARCHITECTURE",
+            title=f"ARD - {project_key}"
+        )
+        
+        prd = fetch_confluence_page(
+            space="PRODUCT",
+            title=f"PRD - {event.issue_key}"
+        ) or fetch_confluence_page_by_link(event.issue_key)
+        
+        # Compile full context with role definition
+        task_description = f"""
+        Role: Development Agent
+        You are a development agent responsible for implementing features and fixes 
+        according to team standards and architecture requirements.
+        
+        Handle Jira issue: {event.issue_key}
+        
+        Task Description:
+        {event.description}
+        
+        Repository URL:
+        {repository_url or "Not specified - check issue title format [project]"}
+        
+        Team Contribution Rules:
+        {team_rules}
+        
+        Architecture Rules:
+        URL: {architecture_rules_url}
+        {architecture_rules}
+        
+        Architecture Requirements Document (ARD):
+        {ard}
+        
+        Product Requirements Document (PRD):
+        {prd}
+        
+        Follow all rules and requirements strictly. Work in the repository: {repository_url}
+        Create a Pull Request after implementation and link it to the Jira issue.
+        """
+        
+        # Assign to appropriate agent with full context and role definition
+        assign_to_agent(agent_type, task_description)
 ```
 
 ### Webhook Event: Issue Moved to "Approved"
@@ -539,7 +534,7 @@ Configure webhooks in Jira to send events to the Orchestrator:
 1. **Issue Updated Event**
    - URL: `https://orchestrator.example.com/webhooks/jira`
    - Events: Issue moved, status changed
-   - Payload: Issue key, project key, status, description
+   - Payload: Issue key, project key, status, description, labels
 
 2. **Required Events**:
    - Issue moved to "Selected for Dev"
@@ -560,6 +555,7 @@ Configure webhooks in Jira to send events to the Orchestrator:
       "status": {
         "name": "Selected for Dev"
       },
+      "labels": ["ai"],
       "description": "Implement user authentication API",
       "summary": "Add JWT authentication"
     }
@@ -597,12 +593,10 @@ Configure webhooks in Jira to send events to the Orchestrator:
 
 ## Implementation Notes
 
-1. **Project Naming Convention**: Projects/teams starting with "ai" are automatically routed to AI agents
-   - `ai-backend` → Backend Agent
-   - `ai-web-front` → Web Frontend Agent
-   - `ai-app-front` → App Frontend Agent
+1. **AI Routing Convention**: Issues labeled with `ai` in the "Selected for Dev" column are automatically routed to AI agents
+   - Label-based routing decouples AI behavior from project naming
 
-2. **Agent Assignment**: Orchestrator determines agent type from project key
+2. **Agent Assignment**: Orchestrator determines agent type from project key (or other convention you define)
 
 3. **Project Repository Mapping**: 
    - Orchestrator extracts project identifier from Jira issue title using pattern `[project]`
