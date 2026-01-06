@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from openhands.sdk import Agent, Conversation, LLM, Tool
+from openhands.sdk import Agent, Conversation, LLM
 
 from ai_orchestrator.domain.issue_entity import IssueEntity
 from ai_orchestrator.domain.repositories import LlmRepository
@@ -56,13 +56,10 @@ class OpenHandsLlmRepository(LlmRepository):
         # For now we use a basic agent without explicit tools.
         # MCP tools (e.g., Atlassian) are configured via the OpenHands SDK
         # using environment variables and mcpServers config.
+        # Tools will be automatically discovered from MCP servers configured via environment variables.
         agent = Agent(
             llm=llm,
-            tools=[
-                # Tools can be registered here in the future,
-                # for now we keep the agent minimal.
-                Tool(name="delegate"),  # placeholder logical tool name
-            ],
+            tools=[],  # MCP tools are configured via environment variables, not here
         )
 
         self._conversation = Conversation(agent=agent)

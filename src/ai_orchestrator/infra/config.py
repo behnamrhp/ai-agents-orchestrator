@@ -18,6 +18,7 @@ class LlmConfig(BaseSettings):
         case_sensitive=False,
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore",  # Ignore extra environment variables that don't match LLM_ prefix
     )
 
     api_key: str = Field(..., description="API key for the underlying LLM provider")
@@ -39,6 +40,7 @@ class JiraConfig(BaseSettings):
         case_sensitive=False,
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore",  # Ignore extra environment variables that don't match JIRA_ prefix
     )
 
     url: str = Field(..., description="Jira instance base URL (e.g., https://your-domain.atlassian.net)")
@@ -54,6 +56,7 @@ class WebhookConfig(BaseSettings):
         case_sensitive=False,
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore",  # Ignore extra environment variables that don't match WEBHOOK_ prefix
     )
 
     base_url: str = Field(
@@ -74,6 +77,7 @@ class ConfluenceConfig(BaseSettings):
         case_sensitive=False,
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore",  # Ignore extra environment variables that don't match CONFLUENCE_ prefix
     )
 
     url: str = Field(..., description="Confluence instance base URL")
@@ -89,6 +93,7 @@ class McpConfig(BaseSettings):
         case_sensitive=False,
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore",  # Ignore extra environment variables that don't match MCP_ATLASSIAN_ prefix
     )
 
     command: str = Field(..., description="Command to run MCP server (e.g., npx)")
@@ -102,6 +107,7 @@ class AppConfig(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",  # Ignore extra environment variables (project-specific vars are handled separately)
     )
 
     llm: LlmConfig = Field(default_factory=LlmConfig)
