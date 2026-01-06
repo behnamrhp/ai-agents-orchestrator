@@ -120,8 +120,7 @@ package "Domain" {
     +project_repo_url: str
     +team_contribution_rules_url: str
     +team_architecture_rules_url: str
-    +prd_url:str
-    +ard_url:str
+    # Note: PRD and ARD URLs should be in issue description, not here
   }
 
   class OrchestratorService {

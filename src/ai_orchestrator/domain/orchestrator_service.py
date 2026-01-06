@@ -131,12 +131,12 @@ class OrchestratorService:
             )
             instructions.extend([
                 "1. Review the PRD (Product Requirements Document) and ARD (Architecture Requirements Document) "
-                "that are referenced in the issue description above. Use the Jira MCP tools to access these documents "
-                "if they are linked.",
+                "URLs that are mentioned in the issue description above. You MUST access these URLs and read the documents "
+                "before proceeding. Use appropriate tools (browser, curl, or MCP tools) to access the PRD and ARD URLs from the issue description.",
                 "",
                 "2. Implement the feature or fix according to:",
-                "   - Product Requirements Document (PRD)",
-                "   - Architecture Requirements Document (ARD)",
+                "   - Product Requirements Document (PRD) - read from URL in issue description",
+                "   - Architecture Requirements Document (ARD) - read from URL in issue description",
                 "   - Team contribution rules",
                 "   - Team architecture rules",
                 "   - Software development best practices (clean code, proper resource usage, etc.)",
@@ -173,8 +173,8 @@ class OrchestratorService:
                 "Be specific and constructive in your feedback.",
                 "",
                 "4. Verify that the PR implementation follows all requirements:",
-                "   - Product Requirements Document (PRD) - all requirements are met",
-                "   - Architecture Requirements Document (ARD) - architecture guidelines are followed",
+                "   - Product Requirements Document (PRD) - all requirements are met (read PRD from URL in issue description)",
+                "   - Architecture Requirements Document (ARD) - architecture guidelines are followed (read ARD from URL in issue description)",
                 "   - Team contribution rules - code style and contribution standards are adhered to",
                 "   - Team architecture rules - architectural patterns and principles are respected",
                 "",
@@ -203,8 +203,8 @@ class OrchestratorService:
             )
             instructions.extend([
                 "1. Please review the PRD (Product Requirements Document) and ARD (Architecture Requirements Document) "
-                "that are referenced in the issue description above. Use the Jira MCP tools to access these documents "
-                "if they are linked.",
+                "URLs that are mentioned in the issue description above. You MUST access these URLs and read the documents "
+                "before proceeding. Use appropriate tools (browser, curl, or MCP tools) to access the PRD and ARD URLs from the issue description.",
                 "",
                 "2. Work on the issue according to team standards and architecture requirements.",
             ])
@@ -233,16 +233,8 @@ class OrchestratorService:
         # Get role definition based on status
         role_definition = self._get_role_definition(issue)
 
-        # Build description section, including PRD and ARD references if present
-        description_parts = [issue.description or "(no description provided)"]
-
-        # Add PRD and ARD URLs to description if they exist
-        if issue.prd_url:
-            description_parts.append(f"\nPRD URL: {issue.prd_url}")
-        if issue.ard_url:
-            description_parts.append(f"\nARD URL: {issue.ard_url}")
-
-        full_description = "\n".join(description_parts)
+        # Use description as-is - PRD and ARD URLs should be included in the issue description
+        full_description = issue.description or "(no description provided)"
 
         # Get status-specific instructions
         status_instructions = self._get_status_specific_instructions(issue)
@@ -272,8 +264,11 @@ class OrchestratorService:
             f"Repository URL: {issue.project_repo_url}",
             f"Team contribution rules URL: {issue.team_contribution_rules_url}",
             f"Architecture rules URL: {issue.team_architecture_rules_url}",
-            f"PRD URL: {issue.prd_url}",
-            f"ARD URL: {issue.ard_url}",
+            "",
+            "=== Important Note ===",
+            "The issue description above may contain PRD (Product Requirements Document) and ARD (Architecture Requirements Document) URLs.",
+            "You MUST read and review these documents from the URLs provided in the issue description before proceeding.",
+            "Look for PRD and ARD URLs in the description and access them to understand the requirements.",
             "",
             "=== Important Instructions ===",
         ]
@@ -306,8 +301,6 @@ class OrchestratorService:
             ("Repository URL", issue.project_repo_url, "repository codebase and structure"),
             ("Team contribution rules URL", issue.team_contribution_rules_url, "team contribution guidelines and standards"),
             ("Architecture rules URL", issue.team_architecture_rules_url, "architecture guidelines and patterns"),
-            ("Product Requirements Document (PRD) URL", issue.prd_url, "product requirements and specifications"),
-            ("Architecture Requirements Document (ARD) URL", issue.ard_url, "architecture requirements and design guidelines"),
         ]
 
         instructions.append("You MUST check and review ALL of the following URLs before proceeding:")
@@ -316,9 +309,12 @@ class OrchestratorService:
             instructions.append(f"- {url_name}: {url_value}")
             instructions.append(f"  Review this URL to understand the {description}.")
         instructions.append("")
-        instructions.append("These URLs contain critical information that you must follow when working on this issue.")
+        instructions.append("Additionally, you MUST check the issue description above for PRD (Product Requirements Document) and ARD (Architecture Requirements Document) URLs.")
+        instructions.append("If PRD or ARD URLs are mentioned in the issue description, you MUST access and read those documents as well.")
+        instructions.append("")
+        instructions.append("These URLs and documents contain critical information that you must follow when working on this issue.")
         instructions.append("Use appropriate tools (browser, curl, or MCP tools) to access and review these resources.")
-        instructions.append("Do not proceed with implementation or review until you have checked ALL of the above URLs.")
+        instructions.append("Do not proceed with implementation or review until you have checked ALL required URLs and documents.")
 
         return instructions
 

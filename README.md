@@ -161,8 +161,8 @@ These variables are dynamically mapped based on the project identifier extracted
 - `PROJECT_REPO_BACKEND` **(Required)**
 - `TEAM_CONTRIBUTION_RULES_URL_BACKEND` **(Required)**
 - `ARCHITECTURE_RULES_URL_BACKEND` **(Required)**
-- `PRD_URL_BACKEND` **(Required)**
-- `ARD_URL_BACKEND` **(Required)**
+
+**Note**: PRD (Product Requirements Document) and ARD (Architecture Requirements Document) URLs should be included in the Jira issue description, NOT in environment variables. The agent will automatically read and access PRD/ARD URLs from the issue description.
 
 **ALL project-specific variables are REQUIRED for each project identifier.** If any are missing, the application will fail with an error log.
 
@@ -184,24 +184,15 @@ TEAM_CONTRIBUTION_RULES_URL_WEB_FRONT=https://your-confluence-instance.com/team-
 ARCHITECTURE_RULES_URL_BACKEND=https://your-confluence-instance.com/architecture-rules
 ARCHITECTURE_RULES_URL_WEB_FRONT=https://your-confluence-instance.com/architecture-rules
 # Add more as needed: ARCHITECTURE_RULES_URL_{YOUR_PROJECT_IDENTIFIER}
-
-# Product Requirements Document URLs (Required)
-# Maps to: PRD_URL_{PROJECT_IDENTIFIER}
-PRD_URL_BACKEND=https://your-confluence-instance.com/prd/backend
-PRD_URL_WEB_FRONT=https://your-confluence-instance.com/prd/web-frontend
-# Add more as needed: PRD_URL_{YOUR_PROJECT_IDENTIFIER}
-
-# Architecture Requirements Document URLs (Required)
-# Maps to: ARD_URL_{PROJECT_IDENTIFIER}
-ARD_URL_BACKEND=https://your-confluence-instance.com/ard/backend
-ARD_URL_WEB_FRONT=https://your-confluence-instance.com/ard/web-frontend
-# Add more as needed: ARD_URL_{YOUR_PROJECT_IDENTIFIER}
 ```
+
+**Important**: PRD (Product Requirements Document) and ARD (Architecture Requirements Document) URLs should be included directly in the Jira issue description, NOT in environment variables. The AI agent will automatically detect and read these URLs from the issue description.
 
 **Important Notes**:
 - **All environment variables are REQUIRED**. Missing variables will cause the application to fail with error logs.
 - Project identifiers are automatically extracted from Jira issue titles. If an issue title starts with `[identifier]`, that identifier is used. Otherwise, the system checks issue labels for matching environment variables.
-- You must define all 5 project-specific variables (`PROJECT_REPO_*`, `TEAM_CONTRIBUTION_RULES_URL_*`, `ARCHITECTURE_RULES_URL_*`, `PRD_URL_*`, `ARD_URL_*`) for each project identifier you plan to use.
+- You must define all 3 project-specific variables (`PROJECT_REPO_*`, `TEAM_CONTRIBUTION_RULES_URL_*`, `ARCHITECTURE_RULES_URL_*`) for each project identifier you plan to use.
+- **PRD and ARD URLs**: These should be included in the Jira issue description, NOT in environment variables. The agent will automatically read and access PRD/ARD URLs from the issue description.
 
 ### 5. Verify MCP Server Availability
 
@@ -329,8 +320,8 @@ These variables are dynamically mapped based on the project identifier extracted
 - `PROJECT_REPO_BACKEND`
 - `TEAM_CONTRIBUTION_RULES_URL_BACKEND`
 - `ARCHITECTURE_RULES_URL_BACKEND`
-- `PRD_URL_BACKEND` (optional)
-- `ARD_URL_BACKEND` (optional)
+
+**Note**: PRD (Product Requirements Document) and ARD (Architecture Requirements Document) URLs should be included in the Jira issue description, NOT in environment variables. The agent will automatically read and access these URLs from the issue description.
 
 #### Project Repository URLs
 - Format: `PROJECT_REPO_{PROJECT_IDENTIFIER}`
@@ -351,21 +342,12 @@ These variables are dynamically mapped based on the project identifier extracted
 - Example: `ARCHITECTURE_RULES_URL_BACKEND=https://confluence.example.com/architecture-rules`
 - Provides URL reference to project-specific architecture rules document
 
-#### Product Requirements Document URLs (Required)
-- Format: `PRD_URL_{PROJECT_IDENTIFIER}`
-- Example: `PRD_URL_BACKEND=https://confluence.example.com/prd/backend`
-- Provides URL reference to Product Requirements Document
-
-#### Architecture Requirements Document URLs (Required)
-- Format: `ARD_URL_{PROJECT_IDENTIFIER}`
-- Example: `ARD_URL_BACKEND=https://confluence.example.com/ard/backend`
-- Provides URL reference to Architecture Requirements Document
-
 **Important**: 
 - **ALL project-specific variables are REQUIRED** for each project identifier you plan to use.
 - If any project-specific environment variable is missing when processing an issue, the application will fail with an error log.
 - Project identifiers are automatically extracted from Jira issue titles. If an issue title starts with `[identifier]`, that identifier is used. Otherwise, the system checks issue labels for matching environment variables.
-- You must define all 5 project-specific variables (`PROJECT_REPO_*`, `TEAM_CONTRIBUTION_RULES_URL_*`, `ARCHITECTURE_RULES_URL_*`, `PRD_URL_*`, `ARD_URL_*`) for each project identifier.
+- You must define all 3 project-specific variables (`PROJECT_REPO_*`, `TEAM_CONTRIBUTION_RULES_URL_*`, `ARCHITECTURE_RULES_URL_*`) for each project identifier.
+- **PRD and ARD URLs**: These should be included in the Jira issue description, NOT in environment variables. The agent will automatically detect and read PRD/ARD URLs from the issue description.
 
 The project identifier is extracted from the Jira issue title using the pattern `[project]`. The repository URL is then included in the agent context for code implementation.
 

@@ -152,8 +152,8 @@ class IssueController:
         - PROJECT_REPO_{PROJECT_IDENTIFIER}
         - TEAM_CONTRIBUTION_RULES_URL_{PROJECT_IDENTIFIER}
         - ARCHITECTURE_RULES_URL_{PROJECT_IDENTIFIER}
-        - PRD_URL_{PROJECT_IDENTIFIER}
-        - ARD_URL_{PROJECT_IDENTIFIER}
+
+        Note: PRD and ARD URLs should be included in the issue description, not in environment variables.
 
         Args:
             project_identifier: The normalized project identifier (e.g., "BACKEND")
@@ -163,8 +163,6 @@ class IssueController:
             - project_repo_url
             - team_contribution_rules_url
             - team_architecture_rules_url
-            - prd_url
-            - ard_url
 
         Raises:
             ValueError: If project_identifier is None or if any required environment variable is missing
@@ -201,22 +199,6 @@ class IssueController:
         else:
             urls["team_architecture_rules_url"] = architecture_url
 
-        # Map PRD URL (REQUIRED)
-        prd_env_var = f"PRD_URL_{project_identifier}"
-        prd_url = self._lookup_env_url(prd_env_var)
-        if not prd_url:
-            missing_vars.append(prd_env_var)
-        else:
-            urls["prd_url"] = prd_url
-
-        # Map ARD URL (REQUIRED)
-        ard_env_var = f"ARD_URL_{project_identifier}"
-        ard_url = self._lookup_env_url(ard_env_var)
-        if not ard_url:
-            missing_vars.append(ard_env_var)
-        else:
-            urls["ard_url"] = ard_url
-
         # If any required environment variables are missing, raise error
         if missing_vars:
             error_msg = (
@@ -228,13 +210,11 @@ class IssueController:
             raise ValueError(error_msg)
 
         logger.info(
-            "Successfully mapped all URLs for project '%s': repo=%s, contribution=%s, architecture=%s, prd=%s, ard=%s",
+            "Successfully mapped all URLs for project '%s': repo=%s, contribution=%s, architecture=%s",
             project_identifier,
             bool(urls["project_repo_url"]),
             bool(urls["team_contribution_rules_url"]),
             bool(urls["team_architecture_rules_url"]),
-            bool(urls["prd_url"]),
-            bool(urls["ard_url"]),
         )
 
         return urls
@@ -311,8 +291,6 @@ class IssueController:
             project_repo_url=url_mapping["project_repo_url"],
             team_contribution_rules_url=url_mapping["team_contribution_rules_url"],
             team_architecture_rules_url=url_mapping["team_architecture_rules_url"],
-            prd_url=url_mapping["prd_url"],
-            ard_url=url_mapping["ard_url"],
         )
 
     def handle_issue_created(self, payload: JiraIssueWebhookPayload) -> None:
