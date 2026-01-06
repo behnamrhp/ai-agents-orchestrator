@@ -44,11 +44,15 @@ class DI(containers.DeclarativeContainer):
         config=jira_config,
     )
 
+    # Configuration for MCP servers
+    mcp_config = providers.Singleton(McpConfig)
+
     # Infra: LLM repository implementation using OpenHands
     llm_repository = providers.Factory(
         OpenHandsLlmRepository,
         llm_config=llm_config,
         openhands_config=openhands_config,
+        mcp_config=mcp_config,
     )
 
     # Domain services
