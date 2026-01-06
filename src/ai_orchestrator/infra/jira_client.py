@@ -243,18 +243,51 @@ class JiraClient:
             return True
         except requests.exceptions.HTTPError as e:
             self.logger.error(f"Failed to connect to Jira: {e}", exc_info=True)
-            # Provide helpful troubleshooting info
+            # Try to get response body for more details
+            error_body = ""
+            try:
+                error_body = e.response.text[:500] if e.response.text else ""
+            except Exception:
+                pass
+
+            # Provide helpful troubleshooting info based on status code
             if e.response.status_code == 401:
                 self.logger.error(
-                    "401 Unauthorized - Check JIRA_USERNAME and JIRA_API_TOKEN. "
-                    "For Jira Server, use your password or a Personal Access Token (PAT)."
+                    "401 Unauthorized - Authentication failed.\n"
+                    "Troubleshooting steps:\n"
+                    "  1. Check JIRA_USERNAME and JIRA_API_TOKEN are correct\n"
+                    "  2. For Jira Server with password: set JIRA_AUTH_TYPE=basic\n"
+                    "  3. For Jira Server with PAT: set JIRA_AUTH_TYPE=bearer and leave JIRA_USERNAME empty\n"
+                    "  4. Try logging into Jira web UI to clear any CAPTCHA"
                 )
             elif e.response.status_code == 403:
                 self.logger.error(
-                    "403 Forbidden - Your credentials may be valid but lack permissions, "
-                    "or the API endpoint is not accessible. "
-                    "For Jira Server, ensure REST API access is enabled."
+                    "403 Forbidden - Access denied. This commonly happens because:\n"
+                    "  1. Personal Access Tokens (PAT) are not enabled on Jira Server.\n"
+                    "     Ask your admin to add JVM parameter: -Datlassian.pats.invalidate.session.enabled=false\n"
+                    "  2. Jira Server version is older than 8.14 (PATs require 8.14+)\n"
+                    "  3. CAPTCHA was triggered - log into Jira web UI to clear it\n"
+                    "  4. REST API access is disabled in Jira security settings\n"
+                    "  5. User lacks permissions for REST API access\n"
+                    "  6. Try with JIRA_AUTH_TYPE=basic and use password instead of PAT"
                 )
+                if error_body:
+                    self.logger.error(f"Response body: {error_body}")
+            elif e.response.status_code == 404:
+                self.logger.error(
+                    f"404 Not Found - The API endpoint was not found at {url}\n"
+                    "  Check that JIRA_URL is correct and Jira is accessible"
+                )
+            else:
+                self.logger.error(f"HTTP {e.response.status_code} error")
+                if error_body:
+                    self.logger.error(f"Response body: {error_body}")
+            return False
+        except requests.exceptions.ConnectionError as e:
+            self.logger.error(
+                f"Connection failed to Jira at {self.base_url}: {e}\n"
+                "  Check that JIRA_URL is correct and the server is accessible"
+            )
             return False
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Failed to connect to Jira: {e}", exc_info=True)
