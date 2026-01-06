@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import List
 
 from .models import IssueEntity, IssueEventDTO
 from .repositories import LlmRepository
@@ -23,17 +24,180 @@ class OrchestratorService:
 
     llm_repository: LlmRepository
 
+    def _is_selected_for_development(self, status: str) -> bool:
+        """
+        Check if issue status indicates "Selected for Development".
+
+        Args:
+            status: The issue status string
+
+        Returns:
+            True if status indicates "Selected for Development", False otherwise
+        """
+        status_lower = status.lower()
+        return "selected" in status_lower and "development" in status_lower
+
+    def _is_to_approve(self, status: str) -> bool:
+        """
+        Check if issue status indicates "to approve".
+
+        Args:
+            status: The issue status string
+
+        Returns:
+            True if status indicates "to approve", False otherwise
+        """
+        status_lower = status.lower()
+        return "approve" in status_lower or "to approve" in status_lower
+
+    def _get_role_definition(self, issue: IssueEntity) -> str:
+        """
+        Get role definition based on issue status.
+
+        Explicitly checks issue status and returns appropriate role:
+        - "Selected for Development" → Senior Software Developer
+        - "to approve" → Senior Software Architect
+        - Other statuses → Development Agent (default)
+
+        Args:
+            issue: The issue entity containing status and project information
+
+        Returns:
+            Role definition string for the agent
+        """
+        # Use team_name from issue entity if available, otherwise fall back to project_key
+        team_name = issue.team_name or issue.project_key or "the team"
+
+        # Check for "Selected for Development" status
+        if self._is_selected_for_development(issue.status):
+            logger.debug(
+                "Issue %s is in 'Selected for Development' status - assigning Developer role",
+                issue.key,
+            )
+            return (
+                f"Role: Senior Software Developer\n"
+                f"You are a senior software developer in the {team_name} team. "
+                f"Your responsibility is to implement features and fixes according to "
+                f"team standards, architecture requirements, and best practices."
+            )
+
+        # Check for "to approve" status
+        if self._is_to_approve(issue.status):
+            logger.debug(
+                "Issue %s is in 'to approve' status - assigning Architect role",
+                issue.key,
+            )
+            return (
+                f"Role: Senior Software Architect\n"
+                f"You are a senior software architect responsible for reviewing and approving "
+                f"pull requests. You must ensure that the implementation follows all requirements "
+                f"and best practices."
+            )
+
+        # Default role for other statuses
+        logger.debug(
+            "Issue %s is in status '%s' - assigning default Development Agent role",
+            issue.key,
+            issue.status,
+        )
+        return (
+            f"Role: Development Agent\n"
+            f"You are a development agent responsible for implementing features and fixes "
+            f"according to team standards and architecture requirements."
+        )
+
+    def _get_status_specific_instructions(self, issue: IssueEntity) -> List[str]:
+        """
+        Get status-specific instructions for the agent based on issue status.
+
+        Explicitly checks issue status and returns appropriate instructions:
+        - "Selected for Development" → Developer implementation instructions
+        - "to approve" → Architect review instructions
+        - Other statuses → Default instructions
+
+        Args:
+            issue: The issue entity containing status information
+
+        Returns:
+            List of instruction strings
+        """
+        instructions = []
+
+        # Check for "Selected for Development" status
+        if self._is_selected_for_development(issue.status):
+            logger.debug(
+                "Generating Developer instructions for issue %s",
+                issue.key,
+            )
+            instructions.extend([
+                "1. Review the PRD (Product Requirements Document) and ARD (Architecture Requirements Document) "
+                "that are referenced in the issue description above. Use the Jira MCP tools to access these documents "
+                "if they are linked.",
+                "",
+                "2. Implement the feature or fix according to:",
+                "   - Product Requirements Document (PRD)",
+                "   - Architecture Requirements Document (ARD)",
+                "   - Team contribution rules",
+                "   - Team architecture rules",
+                "   - Software development best practices (clean code, proper resource usage, etc.)",
+                "",
+                "3. Once you have completed the work for this issue, you must update the issue status to 'to approve' "
+                "using the Jira MCP tools available to you. This is a required step to mark the task as ready for review.",
+            ])
+
+        # Check for "to approve" status
+        elif self._is_to_approve(issue.status):
+            logger.debug(
+                "Generating Architect review instructions for issue %s",
+                issue.key,
+            )
+            instructions.extend([
+                "1. Review the Pull Request (PR) that was created for this issue. Ensure it is properly linked to the issue.",
+                "",
+                "2. Verify that the PR implementation follows all requirements:",
+                "   - Product Requirements Document (PRD) - all requirements are met",
+                "   - Architecture Requirements Document (ARD) - architecture guidelines are followed",
+                "   - Team contribution rules - code style and contribution standards are adhered to",
+                "   - Team architecture rules - architectural patterns and principles are respected",
+                "",
+                "3. Ensure the PR demonstrates best practices of software development:",
+                "   - Clean code principles (readability, maintainability, SOLID principles)",
+                "   - Proper resource usage (memory, CPU, network, database queries)",
+                "   - Error handling and edge cases are properly addressed",
+                "   - Code is well-tested and documented",
+                "   - Security best practices are followed",
+                "",
+                "4. If the PR meets all requirements, approve it. If not, provide detailed feedback on what needs to be improved.",
+            ])
+
+        # Default instructions for other statuses
+        else:
+            logger.debug(
+                "Generating default instructions for issue %s with status '%s'",
+                issue.key,
+                issue.status,
+            )
+            instructions.extend([
+                "1. Please review the PRD (Product Requirements Document) and ARD (Architecture Requirements Document) "
+                "that are referenced in the issue description above. Use the Jira MCP tools to access these documents "
+                "if they are linked.",
+                "",
+                "2. Work on the issue according to team standards and architecture requirements.",
+            ])
+
+        return instructions
+
     def build_agent_prompt(self, issue: IssueEntity, base_prompt: str) -> str:
         """
-        Build a comprehensive prompt for the agent based on issue data.
+        Build a comprehensive prompt for the agent based on issue data and status.
 
         This method constructs a detailed instruction message that includes:
+        - Role definition based on issue status (Developer or Architect)
         - The base prompt/instruction
         - Issue metadata (key, project, status, labels)
         - Issue summary and description (which includes PRD and ARD references)
         - Contextual URLs (repository, contribution rules, architecture rules)
-        - Instructions to check PRD and ARD from the description
-        - Instructions to update the issue status to "to approve" using Jira MCP
+        - Status-specific instructions
 
         Args:
             issue: The domain IssueEntity containing all issue information
@@ -42,6 +206,9 @@ class OrchestratorService:
         Returns:
             A formatted prompt string ready to send to the LLM repository
         """
+        # Get role definition based on status
+        role_definition = self._get_role_definition(issue)
+
         # Build description section, including PRD and ARD references if present
         description_parts = [issue.description or "(no description provided)"]
 
@@ -53,13 +220,22 @@ class OrchestratorService:
 
         full_description = "\n".join(description_parts)
 
+        # Get status-specific instructions
+        status_instructions = self._get_status_specific_instructions(issue)
+
+        # Get team name for display (use team_name from issue, fallback to project_key)
+        team_name = issue.team_name or issue.project_key or "the team"
+
         # Build the complete prompt
         lines = [
+            role_definition,
+            "",
             base_prompt,
             "",
             "=== Issue Information ===",
             f"Issue key: {issue.key}",
             f"Project key: {issue.project_key}",
+            f"Team: {team_name}",
             f"Status: {issue.status}",
             f"Labels: {', '.join(issue.labels) if issue.labels else '(none)'}",
             "",
@@ -74,15 +250,55 @@ class OrchestratorService:
             f"Architecture rules URL: {issue.team_architecture_rules_url or '(not set)'}",
             "",
             "=== Important Instructions ===",
-            "1. Please review the PRD (Product Requirements Document) and ARD (Architecture Requirements Document) "
-            "that are referenced in the issue description above. Use the Jira MCP tools to access these documents "
-            "if they are linked.",
-            "",
-            "2. Once you have completed the work for this issue, you must update the issue status to 'to approve' "
-            "using the Jira MCP tools available to you. This is a required step to mark the task as ready for review.",
         ]
+        lines.extend(status_instructions)
+
+        # Add URL checking instructions if URLs are available
+        url_instructions = self._get_url_checking_instructions(issue)
+        if url_instructions:
+            lines.append("")
+            lines.append("=== Required URL Checks ===")
+            lines.extend(url_instructions)
 
         return "\n".join(lines)
+
+    def _get_url_checking_instructions(self, issue: IssueEntity) -> List[str]:
+        """
+        Get instructions for checking required URLs.
+
+        Forces the AI agent to check repository URL, team contribution rules URL,
+        and architecture rules URL before proceeding with work.
+
+        Args:
+            issue: The issue entity containing URL information
+
+        Returns:
+            List of instruction strings for checking URLs
+        """
+        instructions = []
+        urls_to_check = []
+
+        if issue.project_repo_url:
+            urls_to_check.append(("Repository URL", issue.project_repo_url, "repository codebase and structure"))
+
+        if issue.team_contribution_rules_url:
+            urls_to_check.append(("Team contribution rules URL", issue.team_contribution_rules_url, "team contribution guidelines and standards"))
+
+        if issue.team_architecture_rules_url:
+            urls_to_check.append(("Architecture rules URL", issue.team_architecture_rules_url, "architecture guidelines and patterns"))
+
+        if urls_to_check:
+            instructions.append("You MUST check and review the following URLs before proceeding:")
+            instructions.append("")
+            for url_name, url_value, description in urls_to_check:
+                instructions.append(f"- {url_name}: {url_value}")
+                instructions.append(f"  Review this URL to understand the {description}.")
+            instructions.append("")
+            instructions.append("These URLs contain critical information that you must follow when working on this issue.")
+            instructions.append("Use appropriate tools (browser, curl, or MCP tools) to access and review these resources.")
+            instructions.append("Do not proceed with implementation or review until you have checked all available URLs.")
+
+        return instructions
 
     def assign_agent(self, issue: IssueEntity, prompt: str) -> None:
         """
@@ -109,11 +325,11 @@ class OrchestratorService:
             event: The issue created event DTO
         """
         issue = event.issue
-        logger.info("Handling issue created event for issue %s", issue.key)
+        logger.info("Handling issue created event for issue %s (status: %s)", issue.key, issue.status)
 
         # Map DTO to domain Issue (already done - event.issue is IssueEntity)
-        # Delegate to assignAgent
-        base_prompt = "Please review and work on this newly created Jira issue."
+        # Delegate to assignAgent with status-appropriate base prompt
+        base_prompt = self._get_base_prompt_for_status(issue.status)
         self.assign_agent(issue=issue, prompt=base_prompt)
 
         logger.info("Successfully assigned agent for created issue %s", issue.key)
@@ -127,9 +343,9 @@ class OrchestratorService:
         2. Delegate to assignAgent(domainIssue)
 
         Domain rules applied:
-        - Only process issues that are not already in "to approve" or "done" status
-        - Only process issues with certain labels (if configured)
-        - Skip if issue is in a terminal state
+        - Process issues in "Selected for Development" status
+        - Process issues in "to approve" status (for architecture review)
+        - Skip issues in terminal states
 
         Args:
             event: The issue updated event DTO
@@ -146,19 +362,40 @@ class OrchestratorService:
             )
             return
 
-        # Domain rules passed - delegate to assignAgent
-        base_prompt = "Please review and work on this updated Jira issue."
+        # Domain rules passed - delegate to assignAgent with status-appropriate base prompt
+        base_prompt = self._get_base_prompt_for_status(issue.status)
         self.assign_agent(issue=issue, prompt=base_prompt)
 
         logger.info("Successfully assigned agent for updated issue %s", issue.key)
+
+    def _get_base_prompt_for_status(self, status: str) -> str:
+        """
+        Get base prompt based on issue status.
+
+        Args:
+            status: The issue status
+
+        Returns:
+            Base prompt string appropriate for the status
+        """
+        status_lower = status.lower()
+
+        if "selected" in status_lower and "development" in status_lower:
+            return "Handle this Jira issue that has been selected for development. Implement the required changes according to all specifications and requirements."
+
+        if "approve" in status_lower or "to approve" in status_lower:
+            return "Review and approve the Pull Request for this Jira issue. Ensure it meets all requirements and best practices."
+
+        return "Please review and work on this Jira issue."
 
     def _should_process_issue(self, issue: IssueEntity) -> bool:
         """
         Apply domain rules to determine if an issue should be processed.
 
-        Rules:
-        - Skip issues in terminal states ("done", "closed", "resolved")
-        - Skip issues already in "to approve" status (work already completed)
+        Explicitly checks issue status and applies domain rules:
+        - Process issues in "Selected for Development" status (Developer role)
+        - Process issues in "to approve" status (Architect role for review)
+        - Skip issues in terminal states ("done", "closed", "resolved", "cancelled")
         - Can be extended with label-based filtering
 
         Args:
@@ -173,27 +410,40 @@ class OrchestratorService:
         # Skip terminal states
         terminal_states = {"done", "closed", "resolved", "cancelled"}
         if status_lower in terminal_states:
-            logger.debug(
-                "Issue %s is in terminal state '%s' - skipping",
+            logger.info(
+                "Issue %s is in terminal state '%s' - skipping processing",
                 issue.key,
                 issue.status,
             )
             return False
 
-        # Skip if already in "to approve" status (work completed, waiting for review)
-        if "approve" in status_lower or "review" in status_lower:
-            logger.debug(
-                "Issue %s is already in approval/review state '%s' - skipping",
+        # Process "Selected for Development" status (assign Developer role)
+        if self._is_selected_for_development(issue.status):
+            logger.info(
+                "Issue %s is in 'Selected for Development' status - will assign Developer role",
                 issue.key,
-                issue.status,
             )
-            return False
+            return True
+
+        # Process "to approve" status (assign Architect role for review)
+        if self._is_to_approve(issue.status):
+            logger.info(
+                "Issue %s is in 'to approve' status - will assign Architect role for review",
+                issue.key,
+            )
+            return True
 
         # Additional domain rules can be added here:
-        # - Label-based filtering
+        # - Label-based filtering (e.g., only process issues with "ai" label)
         # - Project-based filtering
         # - Custom status workflows
 
+        # Default: process other statuses (can be made more restrictive if needed)
+        logger.info(
+            "Issue %s is in status '%s' - will process with default role",
+            issue.key,
+            issue.status,
+        )
         return True
 
 

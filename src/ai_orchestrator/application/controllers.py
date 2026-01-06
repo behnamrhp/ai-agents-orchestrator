@@ -64,7 +64,7 @@ class IssueController:
     mcp_startup_service: McpStartupService
 
     @staticmethod
-    def _extract_project_identifier(summary: str, labels: List[str]) -> Optional[str]:
+    def _extract_project_identifier(summary: str, labels: List[str]) -> tuple[Optional[str], Optional[str]]:
         """
         Extract project identifier from issue summary or labels.
 
@@ -76,7 +76,9 @@ class IssueController:
             labels: List of issue labels
 
         Returns:
-            Project identifier (normalized to uppercase with underscores) or None
+            Tuple of (normalized_identifier, raw_identifier):
+            - normalized_identifier: Uppercase with underscores (e.g., "BACKEND") for env var lookup
+            - raw_identifier: Original identifier (e.g., "backend") for display/team_name
         """
         if not summary:
             summary = ""
@@ -86,9 +88,10 @@ class IssueController:
         bracket_pattern = r"^\[([^\]]+)\]\s*"
         match = re.match(bracket_pattern, summary.strip())
         if match:
-            identifier = match.group(1).strip()
-            logger.debug("Extracted project identifier '%s' from summary pattern", identifier)
-            return IssueController._normalize_identifier(identifier)
+            raw_identifier = match.group(1).strip()
+            normalized = IssueController._normalize_identifier(raw_identifier)
+            logger.debug("Extracted project identifier '%s' (normalized: '%s') from summary pattern", raw_identifier, normalized)
+            return normalized, raw_identifier
 
         # Fallback: check labels for common project identifiers
         # Look for labels that might indicate project (e.g., "backend", "frontend", "api")
@@ -98,11 +101,11 @@ class IssueController:
                 # Check if there's an env var for this identifier
                 env_var = f"PROJECT_REPO_{normalized}"
                 if os.getenv(env_var):
-                    logger.debug("Found project identifier '%s' from label '%s'", normalized, label)
-                    return normalized
+                    logger.debug("Found project identifier '%s' (normalized: '%s') from label '%s'", label, normalized, label)
+                    return normalized, label
 
         logger.debug("No project identifier found in summary or labels")
-        return None
+        return None, None
 
     @staticmethod
     def _normalize_identifier(identifier: str) -> str:
@@ -247,10 +250,23 @@ class IssueController:
         summary = fields.get("summary", "") or ""
 
         # Extract project identifier from summary or labels
-        project_identifier = self._extract_project_identifier(summary, labels)
+        # Returns (normalized_identifier, raw_identifier)
+        normalized_identifier, raw_identifier = self._extract_project_identifier(summary, labels)
 
-        # Map team document URLs based on project identifier
-        url_mapping = self._map_team_document_urls(project_identifier)
+        # Map team document URLs based on normalized project identifier
+        url_mapping = self._map_team_document_urls(normalized_identifier)
+
+        # Determine team_name: use raw_identifier if available, otherwise use project_key
+        # raw_identifier is more descriptive (e.g., "backend", "web-front") than project_key (e.g., "PROJ")
+        team_name = raw_identifier if raw_identifier else project_key if project_key else None
+
+        logger.debug(
+            "Mapped issue %s: project_key=%s, project_identifier=%s, team_name=%s",
+            issue_key,
+            project_key,
+            normalized_identifier,
+            team_name,
+        )
 
         return IssueEntity(
             id=jira_issue.get("id", ""),
@@ -260,6 +276,7 @@ class IssueController:
             labels=labels,
             summary=summary,
             description=description,
+            team_name=team_name,
             project_repo_url=url_mapping["project_repo_url"],
             team_contribution_rules_url=url_mapping["team_contribution_rules_url"],
             team_architecture_rules_url=url_mapping["team_architecture_rules_url"],

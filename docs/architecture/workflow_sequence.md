@@ -37,9 +37,9 @@ activate Jira
 Jira -> Orchestrator: Webhook: Issue status/column changed\n(issue_key, project_key, status, labels, description)
 activate Orchestrator
 
-Orchestrator -> Orchestrator: Check if status is "Selected for Dev"\nand issue has label "ai"
+Orchestrator -> Orchestrator: Check if status is "Selected for Dev"\nor "To approve" AND issue has label "ai"
 
-alt Issue in "Selected for Dev" AND has label "ai"
+alt Issue has label "ai" AND (status is "Selected for Dev" OR "To approve")
     Orchestrator -> Orchestrator: Identify agent type\n(backend/web-front/app-front)
     
     Orchestrator -> Jira: Fetch issue title via MCP\nto extract project identifier
@@ -65,7 +65,8 @@ alt Issue in "Selected for Dev" AND has label "ai"
     
     Orchestrator -> Orchestrator: Compile context:\n- Task description\n- Project repository URL\n- Team contribution rules (from env)\n- Architecture rules (from env)\n- ARD (from Confluence)\n- PRD (from Confluence)
     
-    Orchestrator -> DevAgent: Create/Assign agent\nwith role definition and full context:\n\n"Role: Development Agent\nYou are a development agent responsible for\nimplementing features and fixes according to\nteam standards and architecture requirements.\n\nHandle Jira issue: {issue_key}\n\nTask Description:\n{description}\n\nRepository URL:\n{repository_url}\n\nTeam Contribution Rules:\n{team_contribution_rules}\n\nArchitecture Rules:\nURL: {architecture_rules_url}\n{architecture_rules}\n\nArchitecture Requirements Document (ARD):\n{architecture_requirements}\n\nProduct Requirements Document (PRD):\n{product_requirements}\n\nFollow all rules and requirements strictly.\nWork in the repository: {repository_url}"
+    alt Status is "Selected for Development"
+        Orchestrator -> DevAgent: Create/Assign agent\nwith role definition and full context:\n\n"Role: Senior Software Developer\nYou are a senior software developer in the {team_name} team.\nYour responsibility is to implement features and fixes\naccording to team standards, architecture requirements,\nand best practices.\n\nHandle Jira issue: {issue_key}\nStatus: Selected for Development\nTeam: {team_name}\n\nTask Description:\n{description}\n\nRepository URL:\n{repository_url}\n\nTeam Contribution Rules:\n{team_contribution_rules}\n\nArchitecture Rules:\nURL: {architecture_rules_url}\n{architecture_rules}\n\nArchitecture Requirements Document (ARD):\n{architecture_requirements}\n\nProduct Requirements Document (PRD):\n{product_requirements}\n\nInstructions:\n1. Review PRD and ARD referenced in issue description\n2. Implement according to PRD, ARD, team contribution rules,\n   architecture rules, and software development best practices\n   (clean code, proper resource usage, etc.)\n3. Update issue status to 'to approve' when complete\n\nWork in the repository: {repository_url}"
     activate DevAgent
     
     DevAgent -> Jira: Fetch issue details via MCP
@@ -78,69 +79,52 @@ alt Issue in "Selected for Dev" AND has label "ai"
     Git --> DevAgent: PR created, PR URL
     deactivate Git
     
-    DevAgent -> Jira: Link PR to issue\nUpdate issue status\nMove to "Approved" column\nvia MCP Jira tools
-    Jira --> DevAgent: Status updated, PR linked
-    
-    deactivate DevAgent
-    
-    Jira -> Orchestrator: Webhook: Issue moved to "Approved"
-    activate Orchestrator
-    
-    Orchestrator -> Orchestrator: Fetch context for review:\n- Task description\n- Team contribution rules (from env)\n- Architecture rules (from env)\n- ARD (from Confluence)\n- Product requirements (PRD from Confluence)
-    
-    Orchestrator -> Orchestrator: Map project to team contribution rules\nfrom Environment Variables\n(TEAM_CONTRIBUTION_RULES_backend,\nTEAM_CONTRIBUTION_RULES_web-front, etc.)
-    
-    Orchestrator -> Orchestrator: Map project to architecture rules\nfrom Environment Variables\n(ARCHITECTURE_RULES_URL_backend,\nARCHITECTURE_RULES_backend, etc.)
-    
-    Orchestrator -> Confluence: Fetch ARD (Architecture Requirements)\nvia MCP Confluence tools
-    activate Confluence
-    Confluence --> Orchestrator: ARD document
-    deactivate Confluence
-    
-    Orchestrator -> Confluence: Fetch PRD (Product Requirements)\nfor task via MCP Confluence tools
-    activate Confluence
-    Confluence --> Orchestrator: PRD document, requirements
-    deactivate Confluence
-    
-    Orchestrator -> Jira: Fetch issue details via MCP\nto get task description and PR link
-    Jira --> Orchestrator: Issue details, description, PR link
-    
-    Orchestrator -> Orchestrator: Compile review context:\n- Task description\n- Team contribution rules\n- Architecture rules (ARD)\n- Product requirements (PRD)\n- PR link
-    
-    Orchestrator -> ArchAgent: Trigger Architecture Review\nwith role definition and full context:\n\n"Role: Architecture Review Agent\nYou are an architecture review agent responsible\nfor reviewing code implementations for compliance\nwith architecture standards, code quality, and\nbest practices.\n\nReview Jira issue: {issue_key}\nPull Request: {pr_link}\n\nTask Description:\n{description}\n\nTeam Contribution Rules:\n{team_contribution_rules}\n\nArchitecture Rules:\nURL: {architecture_rules_url}\n{architecture_rules}\n\nArchitecture Requirements Document (ARD):\n{architecture_requirements}\n\nProduct Requirements Document (PRD):\n{product_requirements}\n\nReview the PR against all rules and requirements.\nAdd detailed comments to the Git PR, then update\nJira with review summary."
-    activate ArchAgent
-    
-    ArchAgent -> Jira: Fetch issue details via MCP
-    Jira --> ArchAgent: Issue details, PR link
-    
-    ArchAgent -> Git: Fetch Pull Request\nvia Git API/MCP
-    activate Git
-    Git --> ArchAgent: PR details, code changes,\ndiff, commits
-    deactivate Git
-    
-    ArchAgent -> ArchAgent: Review PR implementation\n(Architecture compliance,\ncode quality, standards,\nbest practices)
-    
-    ArchAgent -> Git: Add review comments to PR\nApprove/Request Changes\nvia Git API/MCP
-    activate Git
-    Git --> ArchAgent: Review comments posted
-    deactivate Git
-    
-    ArchAgent -> Jira: Update issue with review results\nAdd review summary comments\nvia MCP Jira tools
-    Jira --> ArchAgent: Comments added
-    
-    alt Review: Rejected
-        ArchAgent -> Jira: Move issue to "Selected for Dev"\nvia MCP Jira tools
-        Jira --> ArchAgent: Status updated
-        note right of ArchAgent: Loop back to\nDevelopment Agent\n(PR feedback in Git)
-        deactivate ArchAgent
-        deactivate Orchestrator
-        deactivate Jira
-        ... [Loop continues] ...
-    else Review: Accepted
-        ArchAgent -> Jira: Move issue to "Approve by Human"\nvia MCP Jira tools
-        Jira --> ArchAgent: Status updated
-        deactivate ArchAgent
-        deactivate Orchestrator
+        DevAgent -> Jira: Link PR to issue\nUpdate issue status\nMove to "to approve" status\nvia MCP Jira tools
+        Jira --> DevAgent: Status updated, PR linked
+        
+        deactivate DevAgent
+        
+    else Status is "to approve"
+        Orchestrator -> Jira: Fetch issue details via MCP\nto get task description and PR link
+        Jira --> Orchestrator: Issue details, description, PR link
+        
+        Orchestrator -> Orchestrator: Compile review context:\n- Task description\n- Team contribution rules\n- Architecture rules (ARD)\n- Product requirements (PRD)\n- PR link
+        
+        Orchestrator -> ArchAgent: Trigger Architecture Review\nwith role definition and full context:\n\n"Role: Senior Software Architect\nYou are a senior software architect responsible for\nreviewing and approving pull requests.\nYou must ensure that the PR implementation follows\nall requirements and best practices.\n\nReview Jira issue: {issue_key}\nStatus: to approve\nPull Request: {pr_link}\nTeam: {team_name}\n\nTask Description:\n{description}\n\nTeam Contribution Rules:\n{team_contribution_rules}\n\nArchitecture Rules:\nURL: {architecture_rules_url}\n{architecture_rules}\n\nArchitecture Requirements Document (ARD):\n{architecture_requirements}\n\nProduct Requirements Document (PRD):\n{product_requirements}\n\nInstructions:\n1. Review the Pull Request linked to this issue\n2. Verify that the PR implementation follows all requirements:\n   - Product Requirements Document (PRD) - all requirements are met\n   - Architecture Requirements Document (ARD) - architecture guidelines are followed\n   - Team contribution rules - code style and contribution standards are adhered to\n   - Team architecture rules - architectural patterns and principles are respected\n3. Ensure the PR demonstrates best practices of software development:\n   - Clean code principles (readability, maintainability, SOLID principles)\n   - Proper resource usage (memory, CPU, network, database queries)\n   - Error handling and edge cases are properly addressed\n   - Code is well-tested and documented\n   - Security best practices are followed\n4. If the PR meets all requirements, approve it. If not, provide detailed feedback on what needs to be improved."
+        activate ArchAgent
+        
+        ArchAgent -> Jira: Fetch issue details via MCP
+        Jira --> ArchAgent: Issue details, PR link
+        
+        ArchAgent -> Git: Fetch Pull Request\nvia Git API/MCP
+        activate Git
+        Git --> ArchAgent: PR details, code changes,\ndiff, commits
+        deactivate Git
+        
+        ArchAgent -> ArchAgent: Review PR implementation\n(Architecture compliance,\ncode quality, standards,\nbest practices)
+        
+        ArchAgent -> Git: Add review comments to PR\nApprove/Request Changes\nvia Git API/MCP
+        activate Git
+        Git --> ArchAgent: Review comments posted
+        deactivate Git
+        
+        ArchAgent -> Jira: Update issue with review results\nAdd review summary comments\nvia MCP Jira tools
+        Jira --> ArchAgent: Comments added
+        
+        alt Review: Rejected
+            ArchAgent -> Jira: Move issue to "Selected for Dev"\nvia MCP Jira tools
+            Jira --> ArchAgent: Status updated
+            note right of ArchAgent: Loop back to\nDevelopment Agent\n(PR feedback in Git)
+            deactivate ArchAgent
+            deactivate Orchestrator
+            deactivate Jira
+            ... [Loop continues] ...
+        else Review: Accepted
+            ArchAgent -> Jira: Move issue to "Approve by Human"\nvia MCP Jira tools
+            Jira --> ArchAgent: Status updated
+            deactivate ArchAgent
+            deactivate Orchestrator
+        end
     end
     
 else Issue NOT in "Selected for Dev" OR missing label "ai"

@@ -24,6 +24,7 @@ class IssueEntity:
     description: str
 
     # Additional contextual URLs for the agent
+    team_name: Optional[str] = None
     project_repo_url: Optional[str] = None
     team_contribution_rules_url: Optional[str] = None
     team_architecture_rules_url: Optional[str] = None
