@@ -141,8 +141,17 @@ class OrchestratorService:
                 "   - Team architecture rules",
                 "   - Software development best practices (clean code, proper resource usage, etc.)",
                 "",
-                "3. Once you have completed the work for this issue, you must update the issue status to 'to approve' "
-                "using the Jira MCP tools available to you. This is a required step to mark the task as ready for review.",
+                "3. Create a separate branch in the repository for this task. Use a descriptive branch name that includes and based on team contibution rules"
+                "the issue key (e.g., 'feature/PROJ-123-add-authentication' or 'fix/PROJ-456-resolve-bug').",
+                "",
+                "4. Make a Pull Request (PR) in the repository with your implementation. Ensure the PR:",
+                "   - Has a clear title and description",
+                "   - References the Jira issue key in the description",
+                "   - Includes all necessary changes for the task",
+                "   - Follows the team's PR guidelines",
+                "",
+                "5. Once the PR is created, you MUST update the issue status in Jira to 'to approve' using the Jira MCP tools "
+                "available to you. This is a required step to mark the task as ready for architecture review.",
             ])
 
         # Check for "to approve" status
@@ -154,20 +163,35 @@ class OrchestratorService:
             instructions.extend([
                 "1. Review the Pull Request (PR) that was created for this issue. Ensure it is properly linked to the issue.",
                 "",
-                "2. Verify that the PR implementation follows all requirements:",
+                "2. Thoroughly review the code changes in the git repository. Examine:",
+                "   - All files changed in the PR",
+                "   - Code quality and structure",
+                "   - Implementation approach and patterns",
+                "   - Test coverage and quality",
+                "",
+                "3. Add review comments directly in the git repository (PR comments) for any issues, suggestions, or questions. "
+                "Be specific and constructive in your feedback.",
+                "",
+                "4. Verify that the PR implementation follows all requirements:",
                 "   - Product Requirements Document (PRD) - all requirements are met",
                 "   - Architecture Requirements Document (ARD) - architecture guidelines are followed",
                 "   - Team contribution rules - code style and contribution standards are adhered to",
                 "   - Team architecture rules - architectural patterns and principles are respected",
                 "",
-                "3. Ensure the PR demonstrates best practices of software development:",
+                "5. Ensure the PR demonstrates best practices of software development:",
                 "   - Clean code principles (readability, maintainability, SOLID principles)",
                 "   - Proper resource usage (memory, CPU, network, database queries)",
                 "   - Error handling and edge cases are properly addressed",
                 "   - Code is well-tested and documented",
                 "   - Security best practices are followed",
                 "",
-                "4. If the PR meets all requirements, approve it. If not, provide detailed feedback on what needs to be improved.",
+                "6. Based on your review:",
+                "   - If the PR is APPROVED: Update the issue status in Jira to 'to approve by human' using the Jira MCP tools.",
+                "   - If the PR is NOT APPROVED: Update the issue status in Jira to 'selected for development' using the Jira MCP tools. "
+                "This will send the task back to the developer for revisions based on your review comments.",
+                "",
+                "7. IMPORTANT: You MUST update the Jira issue status using MCP Jira tools after completing your review, "
+                "regardless of whether you approve or reject the PR.",
             ])
 
         # Default instructions for other statuses

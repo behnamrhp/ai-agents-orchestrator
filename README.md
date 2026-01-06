@@ -77,17 +77,40 @@ git clone <repository-url>
 cd ai-orchestrator
 ```
 
-### 2. Install Dependencies
+### 2. Create Virtual Environment
+
+**Important**: On Arch Linux, Manjaro, and other systems with externally-managed Python environments, you must use a virtual environment.
 
 ```bash
-# Using pip
+# Create virtual environment
+# If 'python' command points to Cursor AppImage, use system Python explicitly:
+/usr/bin/python3 -m venv venv
+
+# Or if python3 points to system Python:
+python3 -m venv venv
+
+# Activate virtual environment
+# On Linux/macOS:
+source venv/bin/activate
+# On Windows:
+# venv\Scripts\activate
+
+# Verify activation (you should see (venv) in your prompt)
+```
+
+### 3. Install Dependencies
+
+```bash
+# Using pip (with virtual environment activated)
 pip install -e .
 
-# Or using uv (recommended)
+# Or using uv (recommended, faster)
 uv pip install -e .
 ```
 
-### 3. Configure Environment Variables
+**Note**: If you encounter "externally-managed-environment" error, make sure you've activated the virtual environment before running pip install.
+
+### 4. Configure Environment Variables
 
 Create a `.env` file in the project root:
 
@@ -178,7 +201,7 @@ ARD_URL_WEB_FRONT=https://your-confluence-instance.com/ard/web-frontend
 - Project identifiers are automatically extracted from Jira issue titles. If an issue title starts with `[identifier]`, that identifier is used. Otherwise, the system checks issue labels for matching environment variables.
 - You must define all 5 project-specific variables (`PROJECT_REPO_*`, `TEAM_CONTRIBUTION_RULES_URL_*`, `ARCHITECTURE_RULES_URL_*`, `PRD_URL_*`, `ARD_URL_*`) for each project identifier you plan to use.
 
-### 4. Verify MCP Server Availability
+### 5. Verify MCP Server Availability
 
 The orchestrator uses `@sooperset/mcp-atlassian` which is automatically downloaded via `npx`. Ensure you have:
 - Internet connection (for first-time download)
