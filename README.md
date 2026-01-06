@@ -125,10 +125,12 @@ See `.env.example` for a complete template with all required options.
 #### Core Configuration (Required)
 
 ```env
-# LLM Configuration (Required)
-LLM_API_KEY=your-api-key-here
+# LLM Configuration
 LLM_MODEL=deepseek
-LLM_BASE_URL=https://api.deepseek.com
+# LLM_API_KEY (Optional) - If not provided, LLM credentials may be configured in OpenHands
+LLM_API_KEY=
+# LLM_BASE_URL (Optional) - If not provided, uses provider's default endpoint
+LLM_BASE_URL=
 
 # Jira Configuration (Required)
 JIRA_URL=https://your-domain.atlassian.net
@@ -285,9 +287,11 @@ ai-orchestrator/
 
 #### Core Configuration (Required)
 
-- `LLM_API_KEY` **(Required)**: API key for the underlying LLM provider (OpenAI, Anthropic, DeepSeek, etc.)
 - `LLM_MODEL` **(Required)**: Model identifier used by OpenHands (e.g., `deepseek`, `anthropic/claude-3-5-sonnet`)
-- `LLM_BASE_URL` **(Required)**: Base URL for LLM endpoints
+- `LLM_API_KEY` **(Optional)**: API key for the underlying LLM provider (OpenAI, Anthropic, DeepSeek, etc.)
+  - Optional: If not provided, LLM credentials may be configured in OpenHands itself
+- `LLM_BASE_URL` **(Optional)**: Base URL for LLM endpoints
+  - Optional: If not provided, uses the provider's default endpoint
 
 - `JIRA_URL` **(Required)**: Jira instance base URL (e.g., `https://your-domain.atlassian.net`)
 - `JIRA_USERNAME` **(Required)**: Jira username/email for API authentication
@@ -306,11 +310,13 @@ ai-orchestrator/
 - `MCP_ATLASSIAN_COMMAND` **(Required)**: Command to run MCP server (e.g., `npx`)
 - `MCP_ATLASSIAN_ARGS` **(Required)**: Arguments for MCP server (e.g., `-y,@sooperset/mcp-atlassian`)
 
-#### OpenHands Self-Hosted Configuration (Optional)
-- `OPENHANDS_RUNTIME_API_URL` (Optional): URL of self-hosted OpenHands instance (e.g., `http://your-server:3000` or `https://openhands.yourdomain.com`)
+#### OpenHands Self-Hosted Configuration (Required if using remote OpenHands)
+- `OPENHANDS_RUNTIME_API_URL` **(Required if using remote OpenHands)**: URL of self-hosted OpenHands instance (e.g., `http://your-server:3000` or `https://openhands.yourdomain.com`)
   - If set, the app will connect to the remote OpenHands instance
   - If not set, uses local Conversation (default)
-- `OPENHANDS_RUNTIME_API_KEY` (Optional): API key for self-hosted OpenHands instance (if required by your server)
+- `OPENHANDS_RUNTIME_API_KEY` **(Required if your OpenHands server requires authentication)**: API key for self-hosted OpenHands instance
+  - Get this from your OpenHands admin dashboard → Settings → API Keys
+  - Leave empty if your server doesn't require authentication
 - `OPENHANDS_SERVER_IMAGE` (Optional, default: `ghcr.io/openhands/agent-server:latest-python`): Docker image for the agent server
 
 ### Project-Specific Environment Variables
@@ -461,9 +467,9 @@ ruff check src/ examples/
 
 ### LLM Issues
 
-1. **Check API Key**: Verify `LLM_API_KEY` is set correctly
+1. **Check API Key**: If using `LLM_API_KEY`, verify it's set correctly. If not set, ensure LLM credentials are configured in OpenHands
 2. **Check Model**: Ensure model identifier is correct for your provider
-3. **Check Base URL**: For custom endpoints, verify `LLM_BASE_URL` is correct
+3. **Check Base URL**: If using `LLM_BASE_URL`, verify it's correct. If not set, the provider's default endpoint will be used
 
 ## Security
 

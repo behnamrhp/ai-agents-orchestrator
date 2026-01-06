@@ -21,14 +21,17 @@ class LlmConfig(BaseSettings):
         extra="ignore",  # Ignore extra environment variables that don't match LLM_ prefix
     )
 
-    api_key: str = Field(..., description="API key for the underlying LLM provider")
+    api_key: str | None = Field(
+        default=None,
+        description="API key for the underlying LLM provider (optional, may be configured in OpenHands)",
+    )
     model: str = Field(
         default="deepseek",
         description="LLM model identifier used by OpenHands (e.g., deepseek, anthropic/claude-3-5-sonnet)",
     )
-    base_url: str = Field(
-        ...,
-        description="Base URL for LLM endpoints",
+    base_url: str | None = Field(
+        default=None,
+        description="Base URL for LLM endpoints (optional, uses provider default if not set)",
     )
 
 

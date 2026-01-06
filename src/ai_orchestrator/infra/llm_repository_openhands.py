@@ -55,8 +55,11 @@ class OpenHandsLlmRepository(LlmRepository):
         # Build LLM from configuration
         llm_kwargs: dict[str, Any] = {
             "model": llm_config.model,
-            "api_key": llm_config.api_key,
         }
+        # Only add api_key if provided (optional - may be configured in OpenHands)
+        if llm_config.api_key:
+            llm_kwargs["api_key"] = llm_config.api_key
+        # Only add base_url if provided (optional - uses provider default)
         if llm_config.base_url:
             llm_kwargs["base_url"] = llm_config.base_url
 
