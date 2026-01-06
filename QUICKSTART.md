@@ -51,25 +51,29 @@ npm --version
 
 If not installed, install Node.js from [nodejs.org](https://nodejs.org/).
 
-## Step 4: Run Example
+## Step 4: Run the FastAPI Webhook Server
+
+Start the FastAPI application that will receive Jira webhooks:
 
 ```bash
-python examples/basic_mcp_connection.py
+uvicorn ai_orchestrator.app:app --reload
 ```
 
-## Step 5: Use in Your Code
+This will start the server on `http://127.0.0.1:8000` by default.
+
+Configure Jira webhooks to call:
+
+- `POST http://127.0.0.1:8000/webhooks/jira/issue-created`
+- `POST http://127.0.0.1:8000/webhooks/jira/issue-updated`
+
+## Step 5: (Optional) Use the Orchestrator Directly
 
 ```python
 from ai_orchestrator import AIOrchestrator
 from ai_orchestrator.config import OrchestratorConfig
 
-# Load config from .env
 config = OrchestratorConfig()
-
-# Create orchestrator
 orchestrator = AIOrchestrator(config=config)
-
-# Use it
 orchestrator.send_message("List Jira issues")
 orchestrator.run()
 ```

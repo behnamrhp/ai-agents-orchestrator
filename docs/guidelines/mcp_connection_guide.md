@@ -6,6 +6,12 @@ This guide explains how to connect the AI Orchestrator to MCP (Model Context Pro
 
 The AI Orchestrator uses OpenHands SDK's MCP integration to connect to external services. MCP servers act as bridges between the AI agent and external APIs, providing tools that agents can use dynamically.
 
+At runtime:
+
+- A **FastAPI app layer** receives Jira webhooks.
+- A **repository/orchestration layer** (`IIssueRepository` / `IssueRepositoryImpl`) ensures the **Atlassian MCP** server is connected inside OpenHands via an `IOpenHandsClient` implementation.
+- A **startup service** (`McpStartupService`) is called when the FastAPI app boots and calls `ensure_mcp_connected()` on the repository, which in turn checks/connects MCP through the OpenHands client.
+
 ## Architecture
 
 ```
@@ -46,22 +52,22 @@ Create a `.env` file in the project root with the following variables:
 ```env
 # LLM Configuration
 LLM_API_KEY=your-api-key-here
-LLM_MODEL=anthropic/claude-sonnet-4-5-20250929
+LLM_MODEL=deepseek
 LLM_BASE_URL=
 
 # Jira Configuration (for MCP Server)
-JIRA_URL=http://176.53.196.35:8081
-JIRA_USERNAME=admin
+JIRA_URL=http://host:port
+JIRA_USERNAME=username
 JIRA_API_TOKEN=your-jira-api-token
 
 # Confluence Configuration (for MCP Server)
-CONFLUENCE_URL=http://176.53.196.35:8090
-CONFLUENCE_USERNAME=behnamrhp
+CONFLUENCE_URL=http://host:port
+CONFLUENCE_USERNAME=username
 CONFLUENCE_API_TOKEN=your-confluence-api-token
 
 # MCP Server Configuration
-MCP_ATLASSIAN_COMMAND=npx
-MCP_ATLASSIAN_ARGS=-y,@sooperset/mcp-atlassian
+MCP_ATLASSIAN_COMMAND=docker
+MCP_ATLASSIAN_ARGS=any-arguments-you-need
 ```
 
 ### MCP Configuration Format
@@ -72,8 +78,8 @@ The orchestrator converts environment variables into OpenHands MCP configuration
 mcp_config = {
     "mcpServers": {
         "atlassian": {
-            "command": "npx",  # or "node", "uvx", etc.
-            "args": ["-y", "@sooperset/mcp-atlassian"],
+            "command": "npx",  # or "node", "uvx", "docker" etc.
+            "args": ["any-arguments-you-need"],
             "env": {
                 "JIRA_URL": "...",
                 "JIRA_USERNAME": "...",
@@ -104,47 +110,6 @@ orchestrator = AIOrchestrator(config=config)
 # Use the orchestrator
 orchestrator.send_message("List all Jira issues in the project")
 orchestrator.run()
-```
-
-### Manual MCP Configuration
-
-If you need to configure MCP servers manually:
-
-```python
-from openhands.sdk import Agent, LLM
-from pydantic import SecretStr
-
-# Create MCP configuration
-mcp_config = {
-    "mcpServers": {
-        "atlassian": {
-            "command": "npx",
-            "args": ["-y", "@sooperset/mcp-atlassian"],
-            "env": {
-                "JIRA_URL": "http://176.53.196.35:8081",
-                "JIRA_USERNAME": "admin",
-                "JIRA_API_TOKEN": "your-token",
-                "CONFLUENCE_URL": "http://176.53.196.35:8090",
-                "CONFLUENCE_USERNAME": "behnamrhp",
-                "CONFLUENCE_API_TOKEN": "your-token",
-            }
-        }
-    }
-}
-
-# Initialize LLM
-llm = LLM(
-    usage_id="agent",
-    model="anthropic/claude-sonnet-4-5-20250929",
-    api_key=SecretStr(os.getenv("LLM_API_KEY")),
-)
-
-# Create agent with MCP configuration
-agent = Agent(
-    llm=llm,
-    tools=[],
-    mcp_config=mcp_config,
-)
 ```
 
 ## MCP Server Types

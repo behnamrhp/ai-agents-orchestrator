@@ -46,21 +46,10 @@ This orchestrator enables AI-driven development workflows by:
 └─────────────────────────────────────────────┘
 ```
 
-### Workflow Sequence
+### Workflow & Code Architecture
 
-The orchestrator manages AI agents through Jira webhooks. When tasks are moved between columns, the orchestrator automatically routes them to appropriate agents.
-
-**Key Workflow:**
-1. Human moves task to "Selected for Dev" in a project starting with "ai"
-2. Orchestrator receives webhook and assigns task to appropriate development agent
-3. Development agent completes task and moves it to "Approved"
-4. Orchestrator triggers architecture review agent
-5. Architecture agent reviews and either:
-   - **Rejects** → Returns to "Selected for Dev" (loop)
-   - **Accepts** → Moves to "Approve by Human"
-6. Human provides final approval
-
-See [Workflow Sequence Diagram](docs/architecture/workflow_sequence.md) for detailed sequence diagram and implementation details.
+- **Workflow Sequence**: The orchestrator manages AI agents through Jira webhooks. When tasks are moved between columns, the orchestrator automatically routes them to appropriate agents. See [Workflow Sequence Diagram](docs/architecture/workflow_sequence.md) for the end‑to‑end Jira/agent workflow.
+- **Project Code Architecture**: The service exposes a FastAPI app layer that receives Jira webhooks, delegates to a repository/orchestration layer, and uses an OpenHands client to talk to OpenHands and Atlassian MCP. See [Project Architecture](docs/architecture/project_architecture.md) for sequence and class diagrams of the code layout.
 
 ## Features
 
@@ -111,17 +100,15 @@ Edit `.env` with your configuration:
 ```env
 # LLM Configuration
 LLM_API_KEY=your-api-key-here
-LLM_MODEL=anthropic/claude-sonnet-4-5-20250929
-LLM_BASE_URL=
 
 # Jira Configuration (for MCP Server)
-JIRA_URL=http://176.53.196.35:8081
-JIRA_USERNAME=admin
+JIRA_URL=http://host:port
+JIRA_USERNAME=username
 JIRA_API_TOKEN=your-jira-api-token
 
 # Confluence Configuration (for MCP Server)
-CONFLUENCE_URL=http://176.53.196.35:8090
-CONFLUENCE_USERNAME=behnamrhp
+CONFLUENCE_URL=http://host:port
+CONFLUENCE_USERNAME=username
 CONFLUENCE_API_TOKEN=your-confluence-api-token
 
 # MCP Server Configuration
@@ -131,18 +118,15 @@ MCP_ATLASSIAN_ARGS=-y,@sooperset/mcp-atlassian
 # Team Contribution Rules
 # General team guidelines and contribution standards
 # This should contain the full text of your team contribution rules
-TEAM_CONTRIBUTION_RULES=Your team contribution rules and guidelines here.
+TEAM_CONTRIBUTION_RULES_URL_{PROJECT_IDENTIFIER}=https://your-confluence-instance.com/team-contribution-rules
 
 # Architecture Rules Configuration
 # URL reference to architecture rules document
-ARCHITECTURE_RULES_URL=https://your-confluence-instance.com/architecture-rules
+ARCHITECTURE_RULES_URL_{PROJECT_IDENTIFIER}=https://your-confluence-instance.com/architecture-rules
 
-# Architecture Rules Content
-# Full architecture rules content that will be provided to agents
-ARCHITECTURE_RULES=Your architecture rules and standards here.
 ```
 
-**Note**: For multi-line content in `TEAM_CONTRIBUTION_RULES` or `ARCHITECTURE_RULES`, you can:
+**Note**: For multi-line content in `TEAM_CONTRIBUTION_RULES_URL_{PROJECT_IDENTIFIER}` or `TEAM_ARCHITECTURE_RULES_URL_{PROJECT_IDENTIFIER}`, you can:
 - Use a single line with escaped newlines (`\n`)
 - Store content in a file and read it programmatically
 - Use environment variable expansion if your shell supports it
@@ -155,34 +139,32 @@ The orchestrator uses `@sooperset/mcp-atlassian` which is automatically download
 
 ## Quick Start
 
-### Basic Usage
+### Run the FastAPI Webhook Server
+
+Start the FastAPI application that will receive Jira webhooks:
+
+```bash
+uvicorn ai_orchestrator.app:app --reload
+```
+
+By default this will listen on `http://127.0.0.1:8000`. You can then configure Jira webhooks to post to:
+
+- `POST /webhooks/jira/issue-created`
+- `POST /webhooks/jira/issue-updated`
+
+### Classic Orchestrator Usage (optional)
+
+You can still use the lower‑level `AIOrchestrator` directly for experiments:
 
 ```python
 from ai_orchestrator import AIOrchestrator
 from ai_orchestrator.config import OrchestratorConfig
 
-# Load configuration from environment
 config = OrchestratorConfig()
-
-# Initialize orchestrator
 orchestrator = AIOrchestrator(config=config)
-
-# Send a message to the agent
 orchestrator.send_message("List all Jira issues in the project")
 orchestrator.run()
-
-# Check cost
 print(f"Cost: ${orchestrator.get_cost():.4f}")
-```
-
-### Run Example
-
-```bash
-# Set environment variables
-export LLM_API_KEY="your-api-key"
-
-# Run example
-python examples/basic_mcp_connection.py
 ```
 
 ## Project Structure
@@ -192,12 +174,20 @@ ai-orchestrator/
 ├── src/
 │   └── ai_orchestrator/
 │       ├── __init__.py
-│       ├── config.py          # Configuration management
-│       └── orchestrator.py    # Main orchestrator class
+│       ├── config.py             # Configuration management
+│       ├── orchestrator.py       # Low‑level AIOrchestrator (OpenHands SDK wrapper)
+│       ├── app.py                # FastAPI app + routes for Jira webhooks
+│       ├── domain.py             # Domain models (Issue, IssueEventDTO)
+│       ├── interfaces.py         # IIssueRepository, IOpenHandsClient
+│       ├── repository.py         # IssueRepositoryImpl orchestration layer
+│       ├── infra_openhands.py    # OpenHandsClient (IOpenHandsClient implementation)
+│       └── services.py           # McpStartupService and other services
 ├── examples/
 │   └── basic_mcp_connection.py
 ├── docs/
 │   ├── architecture/
+│   │   ├── workflow_sequence.md
+│   │   └── project_architecture.md
 │   └── guidelines/
 │       └── mcp_connection_guide.md
 ├── pyproject.toml
@@ -374,17 +364,6 @@ ruff check src/ examples/
 - **[Workflow Sequence Diagram](docs/architecture/workflow_sequence.md)** - Detailed workflow with Orchestrator, Jira webhooks, and agent interactions
 - **[MCP Connection Guide](docs/guidelines/mcp_connection_guide.md)** - How to connect MCP servers to OpenHands
 - **[QUICKSTART.md](QUICKSTART.md)** - Quick start guide for immediate setup
-
-## Roadmap
-
-- [ ] Webhook support for triggering agents (design complete - see [Workflow Sequence](docs/architecture/workflow_sequence.md))
-- [ ] Multi-agent orchestration (Development + Architecture agents)
-- [ ] Agent team management
-- [ ] Workflow definitions (Jira board column mapping)
-- [ ] Integration with CI/CD pipelines
-- [ ] Monitoring and observability
-- [ ] Webhook endpoint implementation
-- [ ] Agent routing logic based on project naming
 
 ## Contributing
 

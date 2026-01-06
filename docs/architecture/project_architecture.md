@@ -24,78 +24,78 @@ skinparam actor {
 }
 
 actor "Jira\n(Webhooks)" as Jira
-participant "FastAPI App\n(App Layer)" as App
+participant "FastAPI Router\n(App Layer)" as Router
 participant "IssueController\n(App Layer)" as IssueController
-participant "Repository Layer\n(IssueRepository)" as Repo
-participant "OpenHands Client\n(Infra)" as OH
-participant "MCP Startup Service\n(Atlassian MCP)" as MCPService
+participant "OrchestratorService\n(Domain)" as OrchestratorSvc
+participant "LLM Repository\n(OpenHands)" as LlmRepo
+participant "MCP Startup Service\n(Domain)" as MCPService
 
 == Service Startup ==
 
-App -> MCPService: onStartup()\nEnsure Atlassian MCP connected (via OpenHands)
+Router -> MCPService: onStartup()\nEnsure Atlassian MCP connected (via LLM Repo)
 activate MCPService
 
-MCPService -> OH: checkOpenHandsForAtlassianMcp()
-OH --> MCPService: connectionStatus (connected?/not connected)
+MCPService -> LlmRepo: checkOpenHandsForAtlassianMcp()
+LlmRepo --> MCPService: connectionStatus (connected?/not connected)
 
 alt Atlassian MCP not connected in OpenHands
-    MCPService -> OH: connectAtlassianMcp()
-    OH --> MCPService: mcpConnected
+    MCPService -> LlmRepo: connectAtlassianMcp()
+    LlmRepo --> MCPService: mcpConnected
 else Atlassian MCP already connected
     MCPService -> MCPService: Skip connect\n(log "already connected")
 end
 
 deactivate MCPService
 
-App -> App: registerRoutes()\n/issue/create, /issue/update
+Router -> Router: registerRoutes()\n/issue-created, /issue-updated
 
-== Webhook: Issue Created/Updated ==
+== Webhook: Issue Created ==
 
-Jira -> App: POST /webhooks/jira/issue-created\n(issue payload)
-activate App
+Jira -> Router: POST /webhooks/jira/issue-created\n(issue payload)
+activate Router
 
-App -> IssueController: handleIssueCreated(payload)
+Router -> IssueController: handleIssueCreated(payload)
 activate IssueController
 
-IssueController -> Repo: createIssue(eventDto)\n(via IssueRepository interface)
-activate Repo
+IssueController -> OrchestratorSvc: handleIssueCreated(eventDto)
+activate OrchestratorSvc
 
-Repo -> Repo: map DTO → domain model
-Repo -> OH: dispatchToOpenHands(domainIssue)\n(e.g., run workflow/agent)
-activate OH
-OH --> Repo: result / workflow status
-deactivate OH
+OrchestratorSvc -> OrchestratorSvc: map DTO → domain Issue
+OrchestratorSvc -> LlmRepo: assignAgent(domainIssue)
+activate LlmRepo
+LlmRepo --> OrchestratorSvc: assignmentResult / ack
+deactivate LlmRepo
 
-Repo --> IssueController: createdIssue / status
-deactivate Repo
+OrchestratorSvc --> IssueController: createdIssue / status
+deactivate OrchestratorSvc
 
-IssueController --> App: HTTP 200\n(acknowledge webhook)
+IssueController --> Router: HTTP 200\n(acknowledge webhook)
 deactivate IssueController
-deactivate App
+deactivate Router
 
 == Webhook: Issue Updated ==
 
-Jira -> App: POST /webhooks/jira/issue-updated\n(issue payload)
-activate App
+Jira -> Router: POST /webhooks/jira/issue-updated\n(issue payload)
+activate Router
 
-App -> IssueController: handleIssueUpdated(payload)
+Router -> IssueController: handleIssueUpdated(payload)
 activate IssueController
 
-IssueController -> Repo: updateIssue(eventDto)\n(via IssueRepository interface)
-activate Repo
+IssueController -> OrchestratorSvc: handleIssueUpdated(eventDto)
+activate OrchestratorSvc
 
-Repo -> Repo: apply domain rules\n(status/label checks, etc.)
-Repo -> OH: updateOpenHandsWorkflow(domainIssue)
-activate OH
-OH --> Repo: result / updated status
-deactivate OH
+OrchestratorSvc -> OrchestratorSvc: apply domain rules\n(status/label checks, etc.)
+OrchestratorSvc -> LlmRepo: assignAgent(domainIssue)
+activate LlmRepo
+LlmRepo --> OrchestratorSvc: updatedAssignment / status
+deactivate LlmRepo
 
-Repo --> IssueController: updatedIssue / status
-deactivate Repo
+OrchestratorSvc --> IssueController: updatedIssue / status
+deactivate OrchestratorSvc
 
-IssueController --> App: HTTP 200\n(acknowledge webhook)
+IssueController --> Router: HTTP 200\n(acknowledge webhook)
 deactivate IssueController
-deactivate App
+deactivate Router
 
 @enduml
 ```
@@ -108,19 +108,6 @@ deactivate App
 @startuml
 skinparam packageStyle rectangle
 
-package "App Layer (FastAPI)" {
-  class FastAPIApp {
-    +registerRoutes()
-    +start()
-  }
-
-  class IssueController {
-    -issueRepository: IIssueRepository
-    +handleIssueCreated(request, reply)
-    +handleIssueUpdated(request, reply)
-  }
-}
-
 package "Domain" {
   class Issue {
     +id: str
@@ -130,62 +117,68 @@ package "Domain" {
     +labels: List[str]
     +summary: str
     +description: str
+    +project_repo_url: str
+    +team_contribution_rules_url: str
+    +team_architecture_rules_url: str
+    +prd_url:str
+    +ard_url:str
   }
 
-  class IssueEventDTO {
-    +fromJiraPayload(payload): IssueEventDTO
-  }
-}
-
-package "Repository / Orchestration Layer" {
-  interface IIssueRepository {
-    +createIssue(event: IssueEventDTO): Issue
-    +updateIssue(event: IssueEventDTO): Issue
-    +ensureMcpConnected(): None
-  }
-
-  class IssueRepositoryImpl {
-    -openHandsClient: IOpenHandsClient
-    +createIssue(event: IssueEventDTO): Issue
-    +updateIssue(event: IssueEventDTO): Issue
-    +ensureMcpConnected(): None
-    -mapToDomain(event: IssueEventDTO): Issue
-  }
-}
-
-package "Infrastructure" {
-  interface IOpenHandsClient {
-    +checkMcpConnection(provider: str): bool
-    +connectMcp(provider: str): None
-    +dispatchIssue(issue: Issue): None
-    +updateIssue(issue: Issue): None
-  }
-
-  class OpenHandsClient implements IOpenHandsClient {
-    +checkMcpConnection(provider: str): bool
-    +connectMcp(provider: str): None
-    +dispatchIssue(issue: Issue): None
-    +updateIssue(issue: Issue): None
+  class OrchestratorService {
+    -llmRepository: LlmRepository
+    +assignAgent(issue: Issue, prompt: str): None
   }
 
   class McpStartupService {
-    -issueRepository: IIssueRepository
+    -llmRepository: LlmRepository
     +onStartup(): None
+  }
+
+  interface LlmRepository {
+    +checkMcpConnection(provider: str): bool
+    +connectMcp(provider: str): None
+    +assignAgent(issue: Issue, prompt: string): None
   }
 }
 
-FastAPIApp --> IssueController : creates / injects
-IssueController --> IIssueRepository : depends on (injected)
-IIssueRepository <|.. IssueRepositoryImpl
+package "Application Layer" {
+  class FastAPIApp {
+    +registerRoutes()
+    +start()
+  }
 
-IssueRepositoryImpl --> IOpenHandsClient : depends on (injected)
-IOpenHandsClient <|.. OpenHandsClient
+  class IssueController {
+    +handleIssueCreated(issue: Issue): None
+    +initMCPs(): None
+  }
+}
 
-IssueRepositoryImpl --> Issue : uses
-IssueRepositoryImpl --> IssueEventDTO : uses
+package "Infra (FastAPI, Config, DI)" {
+  class DI {}
+  note top
+  This is the dependency injection container.
+  It is used to inject the dependencies into the classes.
+  Run the fask api 
+  end note
 
-McpStartupService --> IIssueRepository : depends on
-McpStartupService ..> IOpenHandsClient : via repository.ensureMcpConnected()
+  class OpenHandsLlmRepository  {
+    +checkMcpConnection(provider: str): bool
+    +connectMcp(provider: str): None
+    +assignAgent(issue: Issue, prompt: string): None
+  }
+}
+OpenHandsLlmRepository ..|> LlmRepository
+
+IssueController --> McpStartupService : depends on (injected)
+IssueController --> OrchestratorService : depends on (injected)
+FastAPIApp --> IssueController  : depends on (injected)
+
+OrchestratorService --> Issue : uses
+OrchestratorService --> LlmRepository : depends on
+
+LlmRepository <|.. OpenHandsLlmRepository
+
+McpStartupService --> LlmRepository : depends on
 
 @enduml
 ```
@@ -194,15 +187,16 @@ McpStartupService ..> IOpenHandsClient : via repository.ensureMcpConnected()
 
 ### Dependency Injection & Responsibilities
 
-- **FastAPI app layer**
-  - Owns HTTP server and route registration.
-  - Injects `IIssueRepository` into `IssueController`.
-- **Repository layer**
-  - Implements `IIssueRepository` (`IssueRepositoryImpl`).
-  - Orchestrates domain mapping and calls to `OpenHandsClient`.
-  - Exposes `ensureMcpConnected()` used by `McpStartupService` to check/connect Atlassian MCP.
-- **Infrastructure**
-  - `OpenHandsClient` encapsulates all calls to OpenHands and MCP.
-  - `McpStartupService` runs on startup, uses repository interface to ensure MCP connection before the app starts serving webhooks.
+- **App layer**
+  - Contains HTTP endpoints and controllers that translate Jira webhook payloads into `IssueEventDTO` domain objects.
+  - Does **not** talk to OpenHands directly; it only depends on the domain `OrchestratorService`.
+- **Domain layer**
+  - Owns core domain models (`Issue`, `IssueEventDTO`), the `LlmRepository` interface, and services `OrchestratorService` and `McpStartupService`.
+  - `OrchestratorService` takes domain `Issue` objects and calls `LlmRepository.assignAgent(issue)` for both created and updated hooks.
+  - `McpStartupService` ensures Atlassian MCP is connected at startup via `LlmRepository.checkMcpConnection` / `connectMcp`.
+- **Infra layer**
+  - Hosts the FastAPI application (`FastAPIApp`), configuration, and dependency injection wiring.
+  - Provides `OpenHandsLlmRepository` as the concrete `LlmRepository` implementation, encapsulating all calls to OpenHands and Atlassian MCP.
+  - On startup, wires `McpStartupService` (from the domain layer) to ensure MCP is connected before serving requests.
 
 
