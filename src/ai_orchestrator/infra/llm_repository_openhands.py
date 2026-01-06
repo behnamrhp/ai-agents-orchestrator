@@ -44,6 +44,7 @@ MCP_PROVIDER_ENV_VARS: dict[str, list[str]] = {
 
 MCP_PROVIDER_OPTIONAL_ENV_VARS: dict[str, list[str]] = {
     "atlassian": [
+        "JIRA_USERNAME",  # Optional for PAT auth, but recommended
         "CONFLUENCE_URL",
         "CONFLUENCE_USERNAME",
         "CONFLUENCE_API_TOKEN",

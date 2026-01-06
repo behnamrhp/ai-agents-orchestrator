@@ -11,6 +11,10 @@ import logging
 import sys
 from typing import Any, Dict
 
+# Load .env file into os.environ BEFORE any other imports that might use env vars
+from dotenv import load_dotenv
+load_dotenv()  # This loads .env file variables into os.environ
+
 from fastapi import FastAPI
 from fastapi import status
 
