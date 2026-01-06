@@ -53,6 +53,8 @@ Create a `.env` file in the project root with the following variables:
 # LLM Configuration
 LLM_API_KEY=your-api-key-here
 LLM_MODEL=deepseek
+# LLM_BASE_URL is optional - only set if using a custom API endpoint
+# Leave empty to use the provider's default endpoint
 LLM_BASE_URL=
 
 # Jira Configuration (for MCP Server)

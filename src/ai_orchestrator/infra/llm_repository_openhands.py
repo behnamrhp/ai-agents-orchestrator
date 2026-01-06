@@ -99,6 +99,10 @@ class OpenHandsLlmRepository(LlmRepository):
             return
 
         # Build LLM from configuration
+        # OpenHands SDK uses LiteLLM under the hood, which accepts:
+        # - model: The model identifier
+        # - api_key: API key for authentication
+        # - base_url: Custom API endpoint (also known as api_base in LiteLLM)
         llm_kwargs: dict[str, Any] = {
             "model": llm_config.model,
         }
@@ -112,9 +116,18 @@ class OpenHandsLlmRepository(LlmRepository):
                 "Set LLM_API_KEY environment variable."
             )
         # Only add base_url if provided (optional - uses provider default)
+        # According to OpenHands documentation, LLM_BASE_URL should be set as environment variable
+        # OpenHands SDK reads from environment variables for LLM configuration
+        # We also pass it as a parameter for direct SDK usage (LiteLLM uses 'api_base')
         if llm_config.base_url:
-            llm_kwargs["base_url"] = llm_config.base_url
-            logger.debug("Using custom LLM base URL: %s", llm_config.base_url)
+            # Set as environment variable (primary method - OpenHands SDK reads this)
+            os.environ["LLM_BASE_URL"] = llm_config.base_url
+            # Also pass as parameter for direct SDK initialization
+            # LiteLLM (used by OpenHands) accepts 'api_base' parameter
+            llm_kwargs["api_base"] = llm_config.base_url
+            logger.info("Using custom LLM base URL: %s (set as LLM_BASE_URL env var and api_base parameter)", llm_config.base_url)
+        else:
+            logger.debug("Using default LLM base URL for model '%s'", llm_config.model)
 
         try:
             llm = LLM(**llm_kwargs)
