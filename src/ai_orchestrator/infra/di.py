@@ -11,7 +11,7 @@ from dependency_injector import containers, providers
 from ai_orchestrator.application.controllers import IssueController
 from ai_orchestrator.domain.mcp_startup_service import McpStartupService
 from ai_orchestrator.domain.orchestrator_service import OrchestratorService
-from ai_orchestrator.infra.config import AppConfig, JiraConfig, WebhookConfig
+from ai_orchestrator.infra.config import AppConfig, JiraConfig, LlmConfig, WebhookConfig
 from ai_orchestrator.infra.jira_client import JiraClient
 from ai_orchestrator.infra.llm_repository_openhands import OpenHandsLlmRepository
 
@@ -25,6 +25,7 @@ class DI(containers.DeclarativeContainer):
 
     # Configuration (singleton)
     app_config = providers.Singleton(AppConfig)
+    llm_config = providers.Singleton(LlmConfig)
     jira_config = providers.Singleton(JiraConfig)
     webhook_config = providers.Singleton(WebhookConfig)
 
@@ -34,10 +35,10 @@ class DI(containers.DeclarativeContainer):
         config=jira_config,
     )
 
-    # Infra: LLM repository implementation
+    # Infra: LLM repository implementation using OpenHands
     llm_repository = providers.Factory(
         OpenHandsLlmRepository,
-        client=None,  # Placeholder; real client configuration will be added later.
+        llm_config=llm_config,
     )
 
     # Domain services

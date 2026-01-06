@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import IssueEventDTO, IssueEntity
+from .models import IssueEntity, IssueEventDTO
 from .repositories import LlmRepository
 
 
@@ -20,14 +20,79 @@ class OrchestratorService:
 
     llm_repository: LlmRepository
 
+    def build_agent_prompt(self, issue: IssueEntity, base_prompt: str) -> str:
+        """
+        Build a comprehensive prompt for the agent based on issue data.
+
+        This method constructs a detailed instruction message that includes:
+        - The base prompt/instruction
+        - Issue metadata (key, project, status, labels)
+        - Issue summary and description (which includes PRD and ARD references)
+        - Contextual URLs (repository, contribution rules, architecture rules)
+        - Instructions to check PRD and ARD from the description
+        - Instructions to update the issue status to "to approve" using Jira MCP
+
+        Args:
+            issue: The domain IssueEntity containing all issue information
+            base_prompt: The base instruction/prompt for the agent
+
+        Returns:
+            A formatted prompt string ready to send to the LLM repository
+        """
+        # Build description section, including PRD and ARD references if present
+        description_parts = [issue.description or "(no description provided)"]
+
+        # Add PRD and ARD URLs to description if they exist
+        if issue.prd_url:
+            description_parts.append(f"\nPRD URL: {issue.prd_url}")
+        if issue.ard_url:
+            description_parts.append(f"\nARD URL: {issue.ard_url}")
+
+        full_description = "\n".join(description_parts)
+
+        # Build the complete prompt
+        lines = [
+            base_prompt,
+            "",
+            "=== Issue Information ===",
+            f"Issue key: {issue.key}",
+            f"Project key: {issue.project_key}",
+            f"Status: {issue.status}",
+            f"Labels: {', '.join(issue.labels) if issue.labels else '(none)'}",
+            "",
+            f"Summary: {issue.summary}",
+            "",
+            "Description:",
+            full_description,
+            "",
+            "=== Additional Context ===",
+            f"Repository URL: {issue.project_repo_url or '(not set)'}",
+            f"Team contribution rules URL: {issue.team_contribution_rules_url or '(not set)'}",
+            f"Architecture rules URL: {issue.team_architecture_rules_url or '(not set)'}",
+            "",
+            "=== Important Instructions ===",
+            "1. Please review the PRD (Product Requirements Document) and ARD (Architecture Requirements Document) "
+            "that are referenced in the issue description above. Use the Jira MCP tools to access these documents "
+            "if they are linked.",
+            "",
+            "2. Once you have completed the work for this issue, you must update the issue status to 'to approve' "
+            "using the Jira MCP tools available to you. This is a required step to mark the task as ready for review.",
+        ]
+
+        return "\n".join(lines)
+
     def assign_agent(self, issue: IssueEntity, prompt: str) -> None:
         """
         Assign an agent for the given issue using the provided prompt.
 
-        Implementation will later call into `self.llm_repository.assign_agent`.
+        Builds a comprehensive prompt using domain logic and delegates to
+        the LLM repository to trigger the agent run.
         """
-        # TODO: implement orchestration logic
-        return None
+        # Build the full prompt using domain logic
+        full_prompt = self.build_agent_prompt(issue=issue, base_prompt=prompt)
+
+        # Delegate to the repository to trigger the agent run
+        self.llm_repository.assign_agent(issue=issue, prompt=full_prompt)
 
     def handle_issue_created(self, event: IssueEventDTO) -> None:
         """
@@ -36,7 +101,9 @@ class OrchestratorService:
         Will map the DTO to a domain IssueEntity and delegate to the LLM repository.
         """
         # TODO: implement issue-created business rules
-        return None
+        issue = event.issue
+        base_prompt = "Please review and work on this newly created Jira issue."
+        self.assign_agent(issue=issue, prompt=base_prompt)
 
     def handle_issue_updated(self, event: IssueEventDTO) -> None:
         """
@@ -45,6 +112,8 @@ class OrchestratorService:
         Will apply domain rules before delegating to the LLM repository.
         """
         # TODO: implement issue-updated business rules
-        return None
+        issue = event.issue
+        base_prompt = "Please review and work on this updated Jira issue."
+        self.assign_agent(issue=issue, prompt=base_prompt)
 
 
