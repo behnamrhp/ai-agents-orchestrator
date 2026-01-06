@@ -72,7 +72,9 @@ class FastAPIApp:
         """
         Register webhooks with Jira on startup.
 
-        If registration fails, the application will exit with an error.
+        For Jira Cloud: Registers webhooks via REST API.
+        For Jira Server/Data Center: Webhook API is not available; logs instructions
+        for manual setup and continues startup.
         """
         if not self._webhook_config.enabled:
             logger.info("Webhook registration is disabled via WEBHOOK_ENABLED=false")
@@ -111,11 +113,36 @@ class FastAPIApp:
             logger.info("Webhook registration completed successfully")
 
         except Exception as e:
-            logger.critical(
-                f"Failed to register webhooks with Jira: {e}. Application startup aborted.",
-                exc_info=True,
-            )
-            sys.exit(1)
+            # Check if this is a 404 error (webhook API not available on Jira Server)
+            is_webhook_api_unavailable = "404" in str(e)
+
+            if is_webhook_api_unavailable:
+                logger.warning(
+                    "Webhook registration via REST API is not available on Jira Server/Data Center."
+                )
+                logger.warning(
+                    "Please configure webhooks MANUALLY in Jira:\n"
+                    "  1. Go to Jira Administration > System > WebHooks\n"
+                    "  2. Create a webhook for 'Issue Created' events:\n"
+                    f"     URL: {issue_created_url}\n"
+                    "     Events: Issue > created\n"
+                    "  3. Create a webhook for 'Issue Updated' events:\n"
+                    f"     URL: {issue_updated_url}\n"
+                    "     Events: Issue > updated\n"
+                    "  4. Ensure 'Exclude body' is unchecked (we need the payload)"
+                )
+                logger.info(
+                    "Continuing application startup without automatic webhook registration. "
+                    "The app will work once you configure webhooks manually in Jira."
+                )
+                # Don't exit - continue startup for Jira Server
+            else:
+                # Other errors should still abort startup
+                logger.critical(
+                    f"Failed to register webhooks with Jira: {e}. Application startup aborted.",
+                    exc_info=True,
+                )
+                sys.exit(1)
 
     def start(self) -> FastAPI:
         """
