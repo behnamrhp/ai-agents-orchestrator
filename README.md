@@ -301,14 +301,34 @@ ai-orchestrator/
 - `MCP_ATLASSIAN_COMMAND` **(Required)**: Command to run MCP server (e.g., `npx`)
 - `MCP_ATLASSIAN_ARGS` **(Required)**: Arguments for MCP server (e.g., `-y,@sooperset/mcp-atlassian`)
 
-#### OpenHands Self-Hosted Configuration (Required if using remote OpenHands)
-- `OPENHANDS_RUNTIME_API_URL` **(Required if using remote OpenHands)**: URL of self-hosted OpenHands instance (e.g., `http://your-server:3000` or `https://openhands.yourdomain.com`)
-  - If set, the app will connect to the remote OpenHands instance
-  - If not set, uses local Conversation (default)
-- `OPENHANDS_RUNTIME_API_KEY` **(Required if your OpenHands server requires authentication)**: API key for self-hosted OpenHands instance
-  - Get this from your OpenHands admin dashboard → Settings → API Keys
+#### OpenHands Configuration
+
+Supports three execution modes (in order of priority):
+1. **Remote server**: Connects to a self-hosted OpenHands instance on another server
+2. **Docker workspace**: Runs agents in local Docker containers
+3. **Simple conversation**: Fallback mode without sandboxed execution
+
+##### Remote OpenHands Server (Recommended for production)
+
+Connect to a self-hosted OpenHands server running on another machine:
+
+- `OPENHANDS_SERVER_URL` **(Required for remote mode)**: URL of your self-hosted OpenHands server
+  - Examples: `http://your-server:3000`, `https://openhands.yourdomain.com`
+  - If set, connects to the remote OpenHands server
+  - If not set (empty), uses local Docker workspace or simple mode
+- `OPENHANDS_API_KEY` (Optional): API key for authenticating with the OpenHands server
+  - Required if your server requires authentication
   - Leave empty if your server doesn't require authentication
-- `OPENHANDS_SERVER_IMAGE` (Optional, default: `ghcr.io/openhands/agent-server:latest-python`): Docker image for the agent server
+
+##### Local Docker Workspace (Used when SERVER_URL is not set)
+
+- `OPENHANDS_USE_DOCKER_WORKSPACE` (Optional, default: `true`): Whether to use Docker workspace
+  - Set to `true` to run agents in Docker containers (requires Docker installed locally)
+  - Set to `false` to use simple conversation mode without sandboxing
+
+##### Common Settings
+
+- `OPENHANDS_WORKING_DIR` (Optional, default: `/workspace`): Working directory for agent execution (both remote and local Docker)
 
 ### Project-Specific Environment Variables
 

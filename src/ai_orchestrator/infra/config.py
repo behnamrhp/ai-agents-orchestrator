@@ -104,7 +104,17 @@ class McpConfig(BaseSettings):
 
 
 class OpenHandsConfig(BaseSettings):
-    """OpenHands self-hosted instance configuration."""
+    """OpenHands configuration for connecting to a self-hosted OpenHands server.
+
+    Supports multiple execution modes (in order of priority):
+    1. Remote server: If SERVER_URL is set, connects to self-hosted OpenHands
+    2. Docker workspace: Runs agents in local Docker containers
+    3. Simple conversation: Fallback mode without sandboxed execution
+
+    For self-hosted OpenHands:
+    - Set OPENHANDS_SERVER_URL to your OpenHands server URL (e.g., http://your-server:3000)
+    - Set OPENHANDS_API_KEY if authentication is required
+    """
 
     model_config = SettingsConfigDict(
         env_prefix="OPENHANDS_",
@@ -114,17 +124,27 @@ class OpenHandsConfig(BaseSettings):
         extra="ignore",  # Ignore extra environment variables that don't match OPENHANDS_ prefix
     )
 
-    runtime_api_url: str | None = Field(
+    # Remote server configuration (for self-hosted OpenHands)
+    server_url: str | None = Field(
         default=None,
-        description="URL of self-hosted OpenHands instance (e.g., http://your-server:3000). If None, uses local Conversation.",
+        description="URL of self-hosted OpenHands server (e.g., http://your-server:3000). "
+        "If set, connects to remote server. If not set, uses local Docker or simple mode.",
     )
-    runtime_api_key: str | None = Field(
+    api_key: str | None = Field(
         default=None,
-        description="API key for self-hosted OpenHands instance (if required)",
+        description="API key for authenticating with the OpenHands server. "
+        "Required if your server requires authentication.",
     )
-    server_image: str = Field(
-        default="ghcr.io/openhands/agent-server:latest-python",
-        description="Docker image for the agent server",
+
+    # Local workspace configuration
+    use_docker_workspace: bool = Field(
+        default=True,
+        description="Whether to use Docker workspace for local agent execution. "
+        "Only used if SERVER_URL is not set. Set to false to use simple conversation mode.",
+    )
+    working_dir: str = Field(
+        default="/workspace",
+        description="Working directory for agent execution (both remote and local Docker).",
     )
 
 
