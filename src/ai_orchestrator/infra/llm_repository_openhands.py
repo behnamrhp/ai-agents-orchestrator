@@ -10,10 +10,11 @@ import logging
 from typing import Any
 
 from openhands.sdk import Agent, Conversation, LLM
+from openhands.workspace import APIRemoteWorkspace
 
 from ai_orchestrator.domain.issue_entity import IssueEntity
 from ai_orchestrator.domain.repositories import LlmRepository
-from ai_orchestrator.infra.config import LlmConfig
+from ai_orchestrator.infra.config import LlmConfig, OpenHandsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +28,23 @@ class OpenHandsLlmRepository(LlmRepository):
     response; the goal is to have the run visible in OpenHands itself.
     """
 
-    def __init__(self, llm_config: LlmConfig, client: Any | None = None) -> None:
+    def __init__(
+        self,
+        llm_config: LlmConfig,
+        openhands_config: OpenHandsConfig | None = None,
+        client: Any | None = None,
+    ) -> None:
         """
         Initialize the repository with LLM configuration.
 
         Args:
             llm_config: Configuration for the underlying LLM used by OpenHands.
+            openhands_config: Optional configuration for self-hosted OpenHands instance.
             client: Optional pre-configured OpenHands conversation/client.
         """
         self._llm_config = llm_config
+        self._openhands_config = openhands_config
+        self._workspace: APIRemoteWorkspace | None = None
 
         if client is not None:
             # Allow injecting a pre-configured OpenHands conversation/client
@@ -62,8 +71,30 @@ class OpenHandsLlmRepository(LlmRepository):
             tools=[],  # MCP tools are configured via environment variables, not here
         )
 
-        self._conversation = Conversation(agent=agent)
-        logger.info("Initialized OpenHands Conversation for LLM repository")
+        # Connect to self-hosted OpenHands if URL is provided
+        if openhands_config and openhands_config.runtime_api_url:
+            logger.info(
+                "Connecting to self-hosted OpenHands at %s",
+                openhands_config.runtime_api_url,
+            )
+            # Create remote workspace
+            workspace = APIRemoteWorkspace(
+                runtime_api_url=openhands_config.runtime_api_url,
+                runtime_api_key=openhands_config.runtime_api_key,
+                server_image=openhands_config.server_image,
+            )
+            # Create conversation with remote workspace
+            self._conversation = Conversation(agent=agent, workspace=workspace)
+            self._workspace = workspace  # Keep reference to workspace
+            logger.info(
+                "Initialized Remote OpenHands Conversation connecting to %s",
+                openhands_config.runtime_api_url,
+            )
+        else:
+            # Use local conversation (default)
+            self._conversation = Conversation(agent=agent)
+            self._workspace = None
+            logger.info("Initialized local OpenHands Conversation for LLM repository")
 
     def check_mcp_connection(self, provider: str) -> bool:
         """

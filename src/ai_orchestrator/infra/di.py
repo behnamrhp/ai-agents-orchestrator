@@ -17,6 +17,7 @@ from ai_orchestrator.infra.config import (
     JiraConfig,
     LlmConfig,
     McpConfig,
+    OpenHandsConfig,
     WebhookConfig,
 )
 from ai_orchestrator.infra.jira_client import JiraClient
@@ -35,6 +36,7 @@ class DI(containers.DeclarativeContainer):
     llm_config = providers.Singleton(LlmConfig)
     jira_config = providers.Singleton(JiraConfig)
     webhook_config = providers.Singleton(WebhookConfig)
+    openhands_config = providers.Singleton(OpenHandsConfig)
 
     # Infra: Jira client
     jira_client = providers.Factory(
@@ -46,6 +48,7 @@ class DI(containers.DeclarativeContainer):
     llm_repository = providers.Factory(
         OpenHandsLlmRepository,
         llm_config=llm_config,
+        openhands_config=openhands_config,
     )
 
     # Domain services

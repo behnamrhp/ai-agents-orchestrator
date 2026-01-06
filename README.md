@@ -306,6 +306,13 @@ ai-orchestrator/
 - `MCP_ATLASSIAN_COMMAND` **(Required)**: Command to run MCP server (e.g., `npx`)
 - `MCP_ATLASSIAN_ARGS` **(Required)**: Arguments for MCP server (e.g., `-y,@sooperset/mcp-atlassian`)
 
+#### OpenHands Self-Hosted Configuration (Optional)
+- `OPENHANDS_RUNTIME_API_URL` (Optional): URL of self-hosted OpenHands instance (e.g., `http://your-server:3000` or `https://openhands.yourdomain.com`)
+  - If set, the app will connect to the remote OpenHands instance
+  - If not set, uses local Conversation (default)
+- `OPENHANDS_RUNTIME_API_KEY` (Optional): API key for self-hosted OpenHands instance (if required by your server)
+- `OPENHANDS_SERVER_IMAGE` (Optional, default: `ghcr.io/openhands/agent-server:latest-python`): Docker image for the agent server
+
 ### Project-Specific Environment Variables
 
 These variables are dynamically mapped based on the project identifier extracted from Jira issue titles. The project identifier is extracted from issue summaries using the pattern `[identifier]` (e.g., `[backend] Add feature` → extracts `backend`).

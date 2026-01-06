@@ -100,6 +100,31 @@ class McpConfig(BaseSettings):
     args: str = Field(..., description="Arguments for MCP server (e.g., -y,@sooperset/mcp-atlassian)")
 
 
+class OpenHandsConfig(BaseSettings):
+    """OpenHands self-hosted instance configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="OPENHANDS_",
+        case_sensitive=False,
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",  # Ignore extra environment variables that don't match OPENHANDS_ prefix
+    )
+
+    runtime_api_url: str | None = Field(
+        default=None,
+        description="URL of self-hosted OpenHands instance (e.g., http://your-server:3000). If None, uses local Conversation.",
+    )
+    runtime_api_key: str | None = Field(
+        default=None,
+        description="API key for self-hosted OpenHands instance (if required)",
+    )
+    server_image: str = Field(
+        default="ghcr.io/openhands/agent-server:latest-python",
+        description="Docker image for the agent server",
+    )
+
+
 class AppConfig(BaseSettings):
     """Application-wide configuration."""
 
@@ -115,4 +140,5 @@ class AppConfig(BaseSettings):
     webhook: WebhookConfig = Field(default_factory=WebhookConfig)
     confluence: ConfluenceConfig = Field(default_factory=ConfluenceConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
+    openhands: OpenHandsConfig = Field(default_factory=OpenHandsConfig)
 
