@@ -39,8 +39,15 @@ class JiraConfig(BaseSettings):
     """Jira configuration loaded from environment variables.
 
     Supports both Jira Cloud and Jira Server/Data Center:
-    - Jira Cloud: Uses REST API v3, requires API token
-    - Jira Server/DC: Uses REST API v2, can use password or Personal Access Token (PAT)
+    - Jira Cloud: Uses REST API v3, requires API token with Basic Auth
+    - Jira Server/DC: Uses REST API v2, supports:
+      - Basic Auth: username + password/token
+      - Bearer Token: Personal Access Token (PAT)
+
+    Authentication method selection:
+    - Set JIRA_AUTH_TYPE='bearer' to use PAT authentication (recommended for Server/DC)
+    - Set JIRA_AUTH_TYPE='basic' to use username + password/token (default)
+    - If auth_type is not set and username is empty, Bearer auth is used automatically
     """
 
     model_config = SettingsConfigDict(
@@ -52,7 +59,11 @@ class JiraConfig(BaseSettings):
     )
 
     url: str = Field(..., description="Jira instance base URL (e.g., https://your-domain.atlassian.net or http://your-server:8080)")
-    username: str = Field(..., description="Jira username/email for API authentication")
+    username: str = Field(
+        default="",
+        description="Jira username/email for API authentication. "
+        "Leave empty when using Bearer token (PAT) authentication.",
+    )
     api_token: str = Field(
         ...,
         description="Jira API token (Cloud) or password/Personal Access Token (Server/DC)",
@@ -61,6 +72,12 @@ class JiraConfig(BaseSettings):
         default=None,
         description="Optional: Force API version ('2' for Server/DC, '3' for Cloud). "
         "If not set, auto-detects based on URL.",
+    )
+    auth_type: str | None = Field(
+        default=None,
+        description="Authentication type: 'basic' for username+password/token, "
+        "'bearer' for Personal Access Token (PAT). "
+        "If not set, auto-detects based on whether username is provided.",
     )
 
 

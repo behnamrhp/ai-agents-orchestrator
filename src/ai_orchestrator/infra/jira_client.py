@@ -3,8 +3,10 @@ Jira client for webhook registration and API interactions.
 
 Handles authentication and webhook registration via Jira REST API.
 Supports both:
-- Jira Cloud: REST API v3 (/rest/api/3/)
-- Jira Server/Data Center: REST API v2 (/rest/api/2/)
+- Jira Cloud: REST API v3 (/rest/api/3/) with Basic Auth (username + API token)
+- Jira Server/Data Center: REST API v2 (/rest/api/2/) with either:
+  - Basic Auth (username + password)
+  - Bearer Token (Personal Access Token / PAT)
 """
 
 from __future__ import annotations
@@ -24,6 +26,12 @@ class JiraClient:
 
     Handles webhook registration and authentication.
     Automatically detects Jira Cloud vs Server and uses appropriate API version.
+
+    Authentication methods:
+    - Jira Cloud: Basic Auth with username + API token
+    - Jira Server/Data Center:
+      - If JIRA_USERNAME is provided: Basic Auth (username + password/token)
+      - If JIRA_USERNAME is empty/not set: Bearer token authentication (PAT)
     """
 
     def __init__(self, config: JiraConfig) -> None:
@@ -31,14 +39,19 @@ class JiraClient:
         Initialize Jira client with configuration.
 
         Args:
-            config: Jira configuration containing URL, username, and API token
+            config: Jira configuration containing URL, username, and API token/PAT
         """
         self.config = config
         self.base_url = config.url.rstrip("/")
-        self.auth = HTTPBasicAuth(config.username, config.api_token)
         self.logger = logging.getLogger(__name__)
         self._session = requests.Session()
-        self._session.auth = self.auth
+
+        # Detect if this is Jira Cloud or Server first
+        self._is_cloud = self._is_jira_cloud()
+
+        # Configure authentication based on Jira type and credentials
+        self._configure_authentication()
+
         self._session.headers.update(
             {
                 "Content-Type": "application/json",
@@ -47,6 +60,65 @@ class JiraClient:
         )
         # Detect API version based on Jira type or use configured version
         self._api_version = self._detect_api_version()
+
+    def _is_jira_cloud(self) -> bool:
+        """Check if this is a Jira Cloud instance."""
+        return "atlassian.net" in self.base_url.lower()
+
+    def _configure_authentication(self) -> None:
+        """
+        Configure authentication based on Jira type, config settings, and available credentials.
+
+        Priority:
+        1. Explicit auth_type from config ('basic' or 'bearer')
+        2. Jira Cloud: Always Basic Auth
+        3. Jira Server: Auto-detect based on username presence
+
+        Jira Cloud: Always uses Basic Auth (email + API token)
+        Jira Server/Data Center:
+          - auth_type='bearer': Use Bearer token (PAT)
+          - auth_type='basic': Use Basic Auth (username + password/token)
+          - No auth_type + username provided: Basic Auth
+          - No auth_type + no username: Bearer token (PAT)
+        """
+        # Check for explicit auth_type in config
+        auth_type = getattr(self.config, "auth_type", None)
+
+        if self._is_cloud:
+            # Jira Cloud: Always use Basic Auth with email + API token
+            self.auth = HTTPBasicAuth(self.config.username, self.config.api_token)
+            self._session.auth = self.auth
+            self.logger.info("Using Basic Auth for Jira Cloud")
+            return
+
+        # Jira Server/Data Center
+        # Check explicit auth_type first
+        if auth_type and auth_type.lower() == "bearer":
+            self._use_bearer_auth()
+            return
+
+        if auth_type and auth_type.lower() == "basic":
+            self._use_basic_auth()
+            return
+
+        # Auto-detect: If username is provided, use Basic Auth; otherwise use Bearer
+        if self.config.username and self.config.username.strip():
+            self._use_basic_auth()
+        else:
+            self._use_bearer_auth()
+
+    def _use_basic_auth(self) -> None:
+        """Configure Basic Auth with username and password/token."""
+        self.auth = HTTPBasicAuth(self.config.username, self.config.api_token)
+        self._session.auth = self.auth
+        self.logger.info("Using Basic Auth for Jira Server (username + password/token)")
+
+    def _use_bearer_auth(self) -> None:
+        """Configure Bearer token authentication for PAT."""
+        self.auth = None
+        self._session.auth = None
+        self._session.headers["Authorization"] = f"Bearer {self.config.api_token}"
+        self.logger.info("Using Bearer Token (PAT) for Jira Server")
 
     def _detect_api_version(self) -> str:
         """
@@ -65,8 +137,8 @@ class JiraClient:
             self.logger.info(f"Using configured Jira REST API v{version}")
             return version
 
-        # Auto-detect: Jira Cloud URLs contain 'atlassian.net'
-        if "atlassian.net" in self.base_url.lower():
+        # Auto-detect based on URL
+        if self._is_cloud:
             self.logger.info("Detected Jira Cloud - using REST API v3")
             return "3"
         else:
