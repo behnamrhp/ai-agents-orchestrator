@@ -1,7 +1,10 @@
 """
 Jira client for webhook registration and API interactions.
 
-Handles authentication and webhook registration via Jira REST API v3.
+Handles authentication and webhook registration via Jira REST API.
+Supports both:
+- Jira Cloud: REST API v3 (/rest/api/3/)
+- Jira Server/Data Center: REST API v2 (/rest/api/2/)
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ class JiraClient:
     Client for interacting with Jira REST API.
 
     Handles webhook registration and authentication.
+    Automatically detects Jira Cloud vs Server and uses appropriate API version.
     """
 
     def __init__(self, config: JiraConfig) -> None:
@@ -41,6 +45,38 @@ class JiraClient:
                 "Accept": "application/json",
             }
         )
+        # Detect API version based on Jira type or use configured version
+        self._api_version = self._detect_api_version()
+
+    def _detect_api_version(self) -> str:
+        """
+        Detect whether this is Jira Cloud (v3) or Server/Data Center (v2).
+
+        Uses config.api_version if explicitly set, otherwise auto-detects.
+        Jira Cloud URLs typically contain 'atlassian.net'.
+        Self-hosted Jira Server/Data Center uses v2.
+
+        Returns:
+            API version string ('3' for Cloud, '2' for Server)
+        """
+        # Use explicit config if set
+        if hasattr(self.config, "api_version") and self.config.api_version:
+            version = self.config.api_version
+            self.logger.info(f"Using configured Jira REST API v{version}")
+            return version
+
+        # Auto-detect: Jira Cloud URLs contain 'atlassian.net'
+        if "atlassian.net" in self.base_url.lower():
+            self.logger.info("Detected Jira Cloud - using REST API v3")
+            return "3"
+        else:
+            self.logger.info("Detected Jira Server/Data Center - using REST API v2")
+            return "2"
+
+    @property
+    def api_base(self) -> str:
+        """Get the base API URL for the detected Jira version."""
+        return f"{self.base_url}/rest/api/{self._api_version}"
 
     def register_webhook(
         self,
@@ -52,7 +88,9 @@ class JiraClient:
         """
         Register a webhook in Jira.
 
-        Uses Jira REST API v3: POST /rest/api/3/webhook
+        Note: Webhook registration differs between Jira Cloud and Server:
+        - Jira Cloud: Uses /rest/api/3/webhook (or webhooks admin)
+        - Jira Server: May require manual webhook setup via admin UI
 
         Args:
             webhook_url: URL where Jira will send webhook events
@@ -69,7 +107,7 @@ class JiraClient:
         if events is None:
             events = ["jira:issue_created", "jira:issue_updated"]
 
-        # Jira REST API v3 webhook payload format
+        # Webhook payload format
         payload: dict[str, Any] = {
             "name": name,
             "url": webhook_url,
@@ -80,7 +118,8 @@ class JiraClient:
         if jql_filter:
             payload["jqlFilter"] = jql_filter
 
-        url = f"{self.base_url}/rest/api/3/webhook"
+        # Use the detected API version
+        url = f"{self.api_base}/webhook"
 
         self.logger.info(
             f"Registering webhook '{name}' at {webhook_url} for events: {', '.join(events)}"
@@ -101,6 +140,12 @@ class JiraClient:
             if e.response.text:
                 error_msg += f" - {e.response.text}"
             self.logger.error(error_msg, exc_info=True)
+            # For Jira Server, webhook registration via API might not be available
+            if self._api_version == "2" and e.response.status_code in (403, 404):
+                self.logger.warning(
+                    "Webhook registration via API may not be available on Jira Server. "
+                    "Please configure webhooks manually via Jira Administration > System > WebHooks."
+                )
             raise
 
         except requests.exceptions.RequestException as e:
@@ -115,12 +160,30 @@ class JiraClient:
             True if connection successful, False otherwise
         """
         try:
-            url = f"{self.base_url}/rest/api/3/myself"
+            # Use the detected API version
+            url = f"{self.api_base}/myself"
+            self.logger.debug(f"Testing Jira connection to: {url}")
             response = self._session.get(url, timeout=10)
             response.raise_for_status()
             user_info = response.json()
-            self.logger.info(f"Successfully connected to Jira as: {user_info.get('displayName', 'unknown')}")
+            display_name = user_info.get("displayName") or user_info.get("name", "unknown")
+            self.logger.info(f"Successfully connected to Jira as: {display_name}")
             return True
+        except requests.exceptions.HTTPError as e:
+            self.logger.error(f"Failed to connect to Jira: {e}", exc_info=True)
+            # Provide helpful troubleshooting info
+            if e.response.status_code == 401:
+                self.logger.error(
+                    "401 Unauthorized - Check JIRA_USERNAME and JIRA_API_TOKEN. "
+                    "For Jira Server, use your password or a Personal Access Token (PAT)."
+                )
+            elif e.response.status_code == 403:
+                self.logger.error(
+                    "403 Forbidden - Your credentials may be valid but lack permissions, "
+                    "or the API endpoint is not accessible. "
+                    "For Jira Server, ensure REST API access is enabled."
+                )
+            return False
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Failed to connect to Jira: {e}", exc_info=True)
             return False

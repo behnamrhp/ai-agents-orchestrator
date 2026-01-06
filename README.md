@@ -133,9 +133,16 @@ LLM_API_KEY=
 LLM_BASE_URL=
 
 # Jira Configuration (Required)
+# For Jira Cloud:
 JIRA_URL=https://your-domain.atlassian.net
 JIRA_USERNAME=your-email@example.com
-JIRA_API_TOKEN=your-jira-api-token
+JIRA_API_TOKEN=your-api-token
+
+# For Jira Server/Data Center (uncomment and modify):
+# JIRA_URL=http://your-jira-server:8080
+# JIRA_USERNAME=your-username
+# JIRA_API_TOKEN=your-password-or-PAT
+# JIRA_API_VERSION=2  # Optional: force API v2
 
 # Webhook Configuration (Required)
 WEBHOOK_BASE_URL=http://localhost:8000
@@ -284,9 +291,21 @@ ai-orchestrator/
 - `LLM_BASE_URL` **(Optional)**: Base URL for LLM endpoints
   - Optional: If not provided, uses the provider's default endpoint
 
-- `JIRA_URL` **(Required)**: Jira instance base URL (e.g., `https://your-domain.atlassian.net`)
+- `JIRA_URL` **(Required)**: Jira instance base URL
+  - Jira Cloud: `https://your-domain.atlassian.net`
+  - Jira Server/DC: `http://your-server:8080` or `https://jira.yourdomain.com`
 - `JIRA_USERNAME` **(Required)**: Jira username/email for API authentication
-- `JIRA_API_TOKEN` **(Required)**: Jira API token (generate from Jira account settings → Security → API tokens)
+- `JIRA_API_TOKEN` **(Required)**: Authentication credential
+  - Jira Cloud: API token (generate from Atlassian account → Security → API tokens)
+  - Jira Server/DC: Your password OR a Personal Access Token (PAT)
+- `JIRA_API_VERSION` (Optional): Force API version (`2` for Server/DC, `3` for Cloud)
+  - If not set, auto-detects based on URL (atlassian.net → v3, otherwise → v2)
+
+> **Note for Jira Server/Data Center users:**
+> - REST API v2 is used automatically for self-hosted instances
+> - You can use either your password or a Personal Access Token (PAT) for authentication
+> - To create a PAT: Go to Profile → Personal Access Tokens → Create token
+> - Webhook registration via API may not be available; configure webhooks manually in Jira Administration → System → WebHooks
 
 - `WEBHOOK_BASE_URL` **(Required)**: Publicly accessible URL where Jira can send webhooks
   - Production: `https://your-app.example.com`

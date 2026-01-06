@@ -36,7 +36,12 @@ class LlmConfig(BaseSettings):
 
 
 class JiraConfig(BaseSettings):
-    """Jira configuration loaded from environment variables."""
+    """Jira configuration loaded from environment variables.
+
+    Supports both Jira Cloud and Jira Server/Data Center:
+    - Jira Cloud: Uses REST API v3, requires API token
+    - Jira Server/DC: Uses REST API v2, can use password or Personal Access Token (PAT)
+    """
 
     model_config = SettingsConfigDict(
         env_prefix="JIRA_",
@@ -46,9 +51,17 @@ class JiraConfig(BaseSettings):
         extra="ignore",  # Ignore extra environment variables that don't match JIRA_ prefix
     )
 
-    url: str = Field(..., description="Jira instance base URL (e.g., https://your-domain.atlassian.net)")
+    url: str = Field(..., description="Jira instance base URL (e.g., https://your-domain.atlassian.net or http://your-server:8080)")
     username: str = Field(..., description="Jira username/email for API authentication")
-    api_token: str = Field(..., description="Jira API token for authentication")
+    api_token: str = Field(
+        ...,
+        description="Jira API token (Cloud) or password/Personal Access Token (Server/DC)",
+    )
+    api_version: str | None = Field(
+        default=None,
+        description="Optional: Force API version ('2' for Server/DC, '3' for Cloud). "
+        "If not set, auto-detects based on URL.",
+    )
 
 
 class WebhookConfig(BaseSettings):
