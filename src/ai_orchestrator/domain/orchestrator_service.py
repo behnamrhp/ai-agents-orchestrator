@@ -245,9 +245,11 @@ class OrchestratorService:
             full_description,
             "",
             "=== Additional Context ===",
-            f"Repository URL: {issue.project_repo_url or '(not set)'}",
-            f"Team contribution rules URL: {issue.team_contribution_rules_url or '(not set)'}",
-            f"Architecture rules URL: {issue.team_architecture_rules_url or '(not set)'}",
+            f"Repository URL: {issue.project_repo_url}",
+            f"Team contribution rules URL: {issue.team_contribution_rules_url}",
+            f"Architecture rules URL: {issue.team_architecture_rules_url}",
+            f"PRD URL: {issue.prd_url}",
+            f"ARD URL: {issue.ard_url}",
             "",
             "=== Important Instructions ===",
         ]
@@ -266,8 +268,8 @@ class OrchestratorService:
         """
         Get instructions for checking required URLs.
 
-        Forces the AI agent to check repository URL, team contribution rules URL,
-        and architecture rules URL before proceeding with work.
+        Forces the AI agent to check all required URLs before proceeding with work.
+        All URLs are required and must be checked.
 
         Args:
             issue: The issue entity containing URL information
@@ -276,27 +278,23 @@ class OrchestratorService:
             List of instruction strings for checking URLs
         """
         instructions = []
-        urls_to_check = []
+        urls_to_check = [
+            ("Repository URL", issue.project_repo_url, "repository codebase and structure"),
+            ("Team contribution rules URL", issue.team_contribution_rules_url, "team contribution guidelines and standards"),
+            ("Architecture rules URL", issue.team_architecture_rules_url, "architecture guidelines and patterns"),
+            ("Product Requirements Document (PRD) URL", issue.prd_url, "product requirements and specifications"),
+            ("Architecture Requirements Document (ARD) URL", issue.ard_url, "architecture requirements and design guidelines"),
+        ]
 
-        if issue.project_repo_url:
-            urls_to_check.append(("Repository URL", issue.project_repo_url, "repository codebase and structure"))
-
-        if issue.team_contribution_rules_url:
-            urls_to_check.append(("Team contribution rules URL", issue.team_contribution_rules_url, "team contribution guidelines and standards"))
-
-        if issue.team_architecture_rules_url:
-            urls_to_check.append(("Architecture rules URL", issue.team_architecture_rules_url, "architecture guidelines and patterns"))
-
-        if urls_to_check:
-            instructions.append("You MUST check and review the following URLs before proceeding:")
-            instructions.append("")
-            for url_name, url_value, description in urls_to_check:
-                instructions.append(f"- {url_name}: {url_value}")
-                instructions.append(f"  Review this URL to understand the {description}.")
-            instructions.append("")
-            instructions.append("These URLs contain critical information that you must follow when working on this issue.")
-            instructions.append("Use appropriate tools (browser, curl, or MCP tools) to access and review these resources.")
-            instructions.append("Do not proceed with implementation or review until you have checked all available URLs.")
+        instructions.append("You MUST check and review ALL of the following URLs before proceeding:")
+        instructions.append("")
+        for url_name, url_value, description in urls_to_check:
+            instructions.append(f"- {url_name}: {url_value}")
+            instructions.append(f"  Review this URL to understand the {description}.")
+        instructions.append("")
+        instructions.append("These URLs contain critical information that you must follow when working on this issue.")
+        instructions.append("Use appropriate tools (browser, curl, or MCP tools) to access and review these resources.")
+        instructions.append("Do not proceed with implementation or review until you have checked ALL of the above URLs.")
 
         return instructions
 

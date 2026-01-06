@@ -95,41 +95,88 @@ Create a `.env` file in the project root:
 cp .env.example .env
 ```
 
-Edit `.env` with your configuration:
+Edit `.env` with your configuration. **ALL environment variables are REQUIRED**. The application will fail to start or process issues if any required environment variable is missing.
+
+See `.env.example` for a complete template with all required options.
+
+#### Core Configuration (Required)
 
 ```env
-# LLM Configuration
+# LLM Configuration (Required)
 LLM_API_KEY=your-api-key-here
+LLM_MODEL=deepseek
+LLM_BASE_URL=https://api.deepseek.com
 
-# Jira Configuration (for MCP Server)
-JIRA_URL=http://host:port
-JIRA_USERNAME=username
+# Jira Configuration (Required)
+JIRA_URL=https://your-domain.atlassian.net
+JIRA_USERNAME=your-email@example.com
 JIRA_API_TOKEN=your-jira-api-token
 
-# Confluence Configuration (for MCP Server)
-CONFLUENCE_URL=http://host:port
-CONFLUENCE_USERNAME=username
+# Webhook Configuration (Required)
+WEBHOOK_BASE_URL=http://localhost:8000
+WEBHOOK_ENABLED=true
+
+# Confluence Configuration (Required)
+CONFLUENCE_URL=https://your-domain.atlassian.net/wiki
+CONFLUENCE_USERNAME=your-email@example.com
 CONFLUENCE_API_TOKEN=your-confluence-api-token
 
-# MCP Server Configuration
+# MCP Server Configuration (Required)
 MCP_ATLASSIAN_COMMAND=npx
 MCP_ATLASSIAN_ARGS=-y,@sooperset/mcp-atlassian
-
-# Team Contribution Rules
-# General team guidelines and contribution standards
-# This should contain the full text of your team contribution rules
-TEAM_CONTRIBUTION_RULES_URL_{PROJECT_IDENTIFIER}=https://your-confluence-instance.com/team-contribution-rules
-
-# Architecture Rules Configuration
-# URL reference to architecture rules document
-ARCHITECTURE_RULES_URL_{PROJECT_IDENTIFIER}=https://your-confluence-instance.com/architecture-rules
-
 ```
 
-**Note**: For multi-line content in `TEAM_CONTRIBUTION_RULES_URL_{PROJECT_IDENTIFIER}` or `TEAM_ARCHITECTURE_RULES_URL_{PROJECT_IDENTIFIER}`, you can:
-- Use a single line with escaped newlines (`\n`)
-- Store content in a file and read it programmatically
-- Use environment variable expansion if your shell supports it
+#### Project-Specific Configuration (Required)
+
+These variables are dynamically mapped based on the project identifier extracted from Jira issue titles. The project identifier is extracted from issue summaries using the pattern `[identifier]` (e.g., `[backend] Add feature` → extracts `backend`).
+
+**Format**: `{VAR_NAME}_{PROJECT_IDENTIFIER}` (uppercase, hyphens replaced with underscores)
+
+**Example**: Issue title `[backend] Add authentication` extracts `backend` → normalizes to `BACKEND` → looks up:
+- `PROJECT_REPO_BACKEND` **(Required)**
+- `TEAM_CONTRIBUTION_RULES_URL_BACKEND` **(Required)**
+- `ARCHITECTURE_RULES_URL_BACKEND` **(Required)**
+- `PRD_URL_BACKEND` **(Required)**
+- `ARD_URL_BACKEND` **(Required)**
+
+**ALL project-specific variables are REQUIRED for each project identifier.** If any are missing, the application will fail with an error log.
+
+```env
+# Project Repository URLs (Required)
+# Maps to: PROJECT_REPO_{PROJECT_IDENTIFIER}
+PROJECT_REPO_BACKEND=https://github.com/your-org/backend-repo
+PROJECT_REPO_WEB_FRONT=https://github.com/your-org/web-frontend-repo
+# Add more as needed: PROJECT_REPO_{YOUR_PROJECT_IDENTIFIER}
+
+# Team Contribution Rules URLs (Required)
+# Maps to: TEAM_CONTRIBUTION_RULES_URL_{PROJECT_IDENTIFIER}
+TEAM_CONTRIBUTION_RULES_URL_BACKEND=https://your-confluence-instance.com/team-contribution-rules
+TEAM_CONTRIBUTION_RULES_URL_WEB_FRONT=https://your-confluence-instance.com/team-contribution-rules
+# Add more as needed: TEAM_CONTRIBUTION_RULES_URL_{YOUR_PROJECT_IDENTIFIER}
+
+# Architecture Rules URLs (Required)
+# Maps to: ARCHITECTURE_RULES_URL_{PROJECT_IDENTIFIER}
+ARCHITECTURE_RULES_URL_BACKEND=https://your-confluence-instance.com/architecture-rules
+ARCHITECTURE_RULES_URL_WEB_FRONT=https://your-confluence-instance.com/architecture-rules
+# Add more as needed: ARCHITECTURE_RULES_URL_{YOUR_PROJECT_IDENTIFIER}
+
+# Product Requirements Document URLs (Required)
+# Maps to: PRD_URL_{PROJECT_IDENTIFIER}
+PRD_URL_BACKEND=https://your-confluence-instance.com/prd/backend
+PRD_URL_WEB_FRONT=https://your-confluence-instance.com/prd/web-frontend
+# Add more as needed: PRD_URL_{YOUR_PROJECT_IDENTIFIER}
+
+# Architecture Requirements Document URLs (Required)
+# Maps to: ARD_URL_{PROJECT_IDENTIFIER}
+ARD_URL_BACKEND=https://your-confluence-instance.com/ard/backend
+ARD_URL_WEB_FRONT=https://your-confluence-instance.com/ard/web-frontend
+# Add more as needed: ARD_URL_{YOUR_PROJECT_IDENTIFIER}
+```
+
+**Important Notes**:
+- **All environment variables are REQUIRED**. Missing variables will cause the application to fail with error logs.
+- Project identifiers are automatically extracted from Jira issue titles. If an issue title starts with `[identifier]`, that identifier is used. Otherwise, the system checks issue labels for matching environment variables.
+- You must define all 5 project-specific variables (`PROJECT_REPO_*`, `TEAM_CONTRIBUTION_RULES_URL_*`, `ARCHITECTURE_RULES_URL_*`, `PRD_URL_*`, `ARD_URL_*`) for each project identifier you plan to use.
 
 ### 4. Verify MCP Server Availability
 
@@ -144,13 +191,25 @@ The orchestrator uses `@sooperset/mcp-atlassian` which is automatically download
 Start the FastAPI application that will receive Jira webhooks:
 
 ```bash
-uvicorn ai_orchestrator.app:app --reload
+uvicorn ai_orchestrator.infra.app:app --reload
 ```
 
-By default this will listen on `http://127.0.0.1:8000`. You can then configure Jira webhooks to post to:
+By default this will listen on `http://127.0.0.1:8000`. The application will automatically:
 
-- `POST /webhooks/jira/issue-created`
-- `POST /webhooks/jira/issue-updated`
+1. **Set up logging** with timestamps and stacktraces
+2. **Test Jira connection** using your `JIRA_URL`, `JIRA_USERNAME`, and `JIRA_API_TOKEN`
+3. **Register webhooks with Jira** (if `WEBHOOK_ENABLED=true`)
+   - Registers webhooks for `issue_created` and `issue_updated` events
+   - Uses `WEBHOOK_BASE_URL` as the callback URL
+4. **Initialize MCP connections** for Atlassian services
+5. **Start serving webhook endpoints**:
+   - `POST /webhooks/jira/issue-created`
+   - `POST /webhooks/jira/issue-updated`
+
+**Important**: 
+- If Jira connection fails, the application will exit with an error. Check your Jira configuration.
+- If webhook registration fails, the application will exit with an error. Ensure `WEBHOOK_BASE_URL` is publicly accessible and `WEBHOOK_ENABLED=true`.
+- For local development, use a tool like [ngrok](https://ngrok.com/) to expose your local server: `ngrok http 8000` and set `WEBHOOK_BASE_URL` to the ngrok URL.
 
 ### Classic Orchestrator Usage (optional)
 
@@ -197,55 +256,80 @@ ai-orchestrator/
 
 ## Configuration
 
-### LLM Configuration
+### Environment Variables
 
-- `LLM_API_KEY`: Your LLM provider API key (required)
-- `LLM_MODEL`: Model identifier (default: `anthropic/claude-sonnet-4-5-20250929`)
-- `LLM_BASE_URL`: Base URL for custom LLM endpoints (optional)
+**ALL environment variables are REQUIRED.** The application will fail to start or process issues if any required environment variable is missing.
 
-### Atlassian Configuration
+#### Core Configuration (Required)
 
-- `JIRA_URL`: Self-hosted Jira instance URL
-- `JIRA_USERNAME`: Jira username
-- `JIRA_API_TOKEN`: Jira API token (generate from Jira settings)
-- `CONFLUENCE_URL`: Self-hosted Confluence instance URL
-- `CONFLUENCE_USERNAME`: Confluence username
-- `CONFLUENCE_API_TOKEN`: Confluence API token
+- `LLM_API_KEY` **(Required)**: API key for the underlying LLM provider (OpenAI, Anthropic, DeepSeek, etc.)
+- `LLM_MODEL` **(Required)**: Model identifier used by OpenHands (e.g., `deepseek`, `anthropic/claude-3-5-sonnet`)
+- `LLM_BASE_URL` **(Required)**: Base URL for LLM endpoints
 
-### MCP Configuration
+- `JIRA_URL` **(Required)**: Jira instance base URL (e.g., `https://your-domain.atlassian.net`)
+- `JIRA_USERNAME` **(Required)**: Jira username/email for API authentication
+- `JIRA_API_TOKEN` **(Required)**: Jira API token (generate from Jira account settings → Security → API tokens)
 
-- `MCP_ATLASSIAN_COMMAND`: Command to run MCP server (default: `npx`)
-- `MCP_ATLASSIAN_ARGS`: Arguments for MCP server (default: `-y,@sooperset/mcp-atlassian`)
+- `WEBHOOK_BASE_URL` **(Required)**: Publicly accessible URL where Jira can send webhooks
+  - Production: `https://your-app.example.com`
+  - Development: `https://your-ngrok-url.ngrok.io`
+  - Local testing: `http://localhost:8000` (only works if Jira can reach it)
+- `WEBHOOK_ENABLED` **(Required)**: Set to `true` to register webhooks on startup, `false` to skip registration
 
-### Team and Architecture Rules Configuration
+- `CONFLUENCE_URL` **(Required)**: Confluence instance base URL
+- `CONFLUENCE_USERNAME` **(Required)**: Confluence username for API authentication
+- `CONFLUENCE_API_TOKEN` **(Required)**: Confluence API token
 
-These environment variables provide project-specific rules and guidelines that are loaded directly (not from Confluence) and provided to agents. Rules are mapped based on the project identifier extracted from Jira issue titles.
+- `MCP_ATLASSIAN_COMMAND` **(Required)**: Command to run MCP server (e.g., `npx`)
+- `MCP_ATLASSIAN_ARGS` **(Required)**: Arguments for MCP server (e.g., `-y,@sooperset/mcp-atlassian`)
 
-**Format**: `{RULE_TYPE}_{PROJECT_IDENTIFIER}` (uppercase, hyphens replaced with underscores)
+### Project-Specific Environment Variables
 
-**Example**: Issue title `[backend] Add authentication` → extracts `backend` → looks up:
-- `TEAM_CONTRIBUTION_RULES_BACKEND`
+These variables are dynamically mapped based on the project identifier extracted from Jira issue titles. The project identifier is extracted from issue summaries using the pattern `[identifier]` (e.g., `[backend] Add feature` → extracts `backend`).
+
+**Format**: `{VAR_NAME}_{PROJECT_IDENTIFIER}` (uppercase, hyphens replaced with underscores)
+
+**Example**: Issue title `[backend] Add authentication` extracts `backend` → normalizes to `BACKEND` → looks up:
+- `PROJECT_REPO_BACKEND`
+- `TEAM_CONTRIBUTION_RULES_URL_BACKEND`
 - `ARCHITECTURE_RULES_URL_BACKEND`
-- `ARCHITECTURE_RULES_BACKEND`
+- `PRD_URL_BACKEND` (optional)
+- `ARD_URL_BACKEND` (optional)
 
-**Variables per project**:
-- `TEAM_CONTRIBUTION_RULES_{PROJECT_IDENTIFIER}`: Project-specific team guidelines and contribution standards
-- `ARCHITECTURE_RULES_URL_{PROJECT_IDENTIFIER}`: URL reference to project-specific architecture rules document
-- `ARCHITECTURE_RULES_{PROJECT_IDENTIFIER}`: Full project-specific architecture rules content
-
-**Note**: For multi-line content, you can use escaped newlines (`\n`) or store content in a file and read it programmatically in your orchestrator implementation.
-
-### Project Repository Mapping
-
-Map project identifiers (extracted from Jira issue titles) to repository URLs:
-
-- Format: `PROJECT_REPO_{PROJECT_IDENTIFIER}` (uppercase, hyphens replaced with underscores)
-- Example: Issue title `[backend] Add authentication` → extracts `backend` → looks up `PROJECT_REPO_BACKEND`
+#### Project Repository URLs
+- Format: `PROJECT_REPO_{PROJECT_IDENTIFIER}`
+- Example: `PROJECT_REPO_BACKEND=https://github.com/your-org/backend-repo`
 - Multiple mappings can be defined:
   - `PROJECT_REPO_BACKEND`: Repository URL for backend projects
   - `PROJECT_REPO_WEB_FRONT`: Repository URL for web frontend projects
   - `PROJECT_REPO_APP_FRONT`: Repository URL for app frontend projects
-  - Add more as needed for your projects
+  - Add more as needed: `PROJECT_REPO_{YOUR_PROJECT_IDENTIFIER}`
+
+#### Team Contribution Rules URLs
+- Format: `TEAM_CONTRIBUTION_RULES_URL_{PROJECT_IDENTIFIER}`
+- Example: `TEAM_CONTRIBUTION_RULES_URL_BACKEND=https://confluence.example.com/team-contribution-rules`
+- Provides URL reference to project-specific team contribution guidelines and standards
+
+#### Architecture Rules URLs
+- Format: `ARCHITECTURE_RULES_URL_{PROJECT_IDENTIFIER}`
+- Example: `ARCHITECTURE_RULES_URL_BACKEND=https://confluence.example.com/architecture-rules`
+- Provides URL reference to project-specific architecture rules document
+
+#### Product Requirements Document URLs (Required)
+- Format: `PRD_URL_{PROJECT_IDENTIFIER}`
+- Example: `PRD_URL_BACKEND=https://confluence.example.com/prd/backend`
+- Provides URL reference to Product Requirements Document
+
+#### Architecture Requirements Document URLs (Required)
+- Format: `ARD_URL_{PROJECT_IDENTIFIER}`
+- Example: `ARD_URL_BACKEND=https://confluence.example.com/ard/backend`
+- Provides URL reference to Architecture Requirements Document
+
+**Important**: 
+- **ALL project-specific variables are REQUIRED** for each project identifier you plan to use.
+- If any project-specific environment variable is missing when processing an issue, the application will fail with an error log.
+- Project identifiers are automatically extracted from Jira issue titles. If an issue title starts with `[identifier]`, that identifier is used. Otherwise, the system checks issue labels for matching environment variables.
+- You must define all 5 project-specific variables (`PROJECT_REPO_*`, `TEAM_CONTRIBUTION_RULES_URL_*`, `ARCHITECTURE_RULES_URL_*`, `PRD_URL_*`, `ARD_URL_*`) for each project identifier.
 
 The project identifier is extracted from the Jira issue title using the pattern `[project]`. The repository URL is then included in the agent context for code implementation.
 

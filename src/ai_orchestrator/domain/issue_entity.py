@@ -23,13 +23,13 @@ class IssueEntity:
     summary: str
     description: str
 
-    # Additional contextual URLs for the agent
+    # Additional contextual URLs for the agent (all required)
     team_name: Optional[str] = None
-    project_repo_url: Optional[str] = None
-    team_contribution_rules_url: Optional[str] = None
-    team_architecture_rules_url: Optional[str] = None
-    prd_url: Optional[str] = None
-    ard_url: Optional[str] = None
+    project_repo_url: str
+    team_contribution_rules_url: str
+    team_architecture_rules_url: str
+    prd_url: str
+    ard_url: str
 
 
 @dataclass

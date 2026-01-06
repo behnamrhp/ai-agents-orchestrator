@@ -11,7 +11,14 @@ from dependency_injector import containers, providers
 from ai_orchestrator.application.controllers import IssueController
 from ai_orchestrator.domain.mcp_startup_service import McpStartupService
 from ai_orchestrator.domain.orchestrator_service import OrchestratorService
-from ai_orchestrator.infra.config import AppConfig, JiraConfig, LlmConfig, WebhookConfig
+from ai_orchestrator.infra.config import (
+    AppConfig,
+    ConfluenceConfig,
+    JiraConfig,
+    LlmConfig,
+    McpConfig,
+    WebhookConfig,
+)
 from ai_orchestrator.infra.jira_client import JiraClient
 from ai_orchestrator.infra.llm_repository_openhands import OpenHandsLlmRepository
 

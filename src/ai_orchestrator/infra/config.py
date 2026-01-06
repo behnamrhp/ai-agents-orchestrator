@@ -25,9 +25,9 @@ class LlmConfig(BaseSettings):
         default="deepseek",
         description="LLM model identifier used by OpenHands (e.g., deepseek, anthropic/claude-3-5-sonnet)",
     )
-    base_url: str | None = Field(
-        default=None,
-        description="Optional base URL for custom LLM endpoints",
+    base_url: str = Field(
+        ...,
+        description="Base URL for LLM endpoints",
     )
 
 
@@ -62,8 +62,37 @@ class WebhookConfig(BaseSettings):
     )
     enabled: bool = Field(
         default=True,
-        description="Whether to register webhooks on startup (set to false to skip registration)",
+        description="Whether to register webhooks on startup",
     )
+
+
+class ConfluenceConfig(BaseSettings):
+    """Confluence configuration loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="CONFLUENCE_",
+        case_sensitive=False,
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
+
+    url: str = Field(..., description="Confluence instance base URL")
+    username: str = Field(..., description="Confluence username for API authentication")
+    api_token: str = Field(..., description="Confluence API token for authentication")
+
+
+class McpConfig(BaseSettings):
+    """MCP server configuration loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="MCP_ATLASSIAN_",
+        case_sensitive=False,
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
+
+    command: str = Field(..., description="Command to run MCP server (e.g., npx)")
+    args: str = Field(..., description="Arguments for MCP server (e.g., -y,@sooperset/mcp-atlassian)")
 
 
 class AppConfig(BaseSettings):
@@ -78,4 +107,6 @@ class AppConfig(BaseSettings):
     llm: LlmConfig = Field(default_factory=LlmConfig)
     jira: JiraConfig = Field(default_factory=JiraConfig)
     webhook: WebhookConfig = Field(default_factory=WebhookConfig)
+    confluence: ConfluenceConfig = Field(default_factory=ConfluenceConfig)
+    mcp: McpConfig = Field(default_factory=McpConfig)
 

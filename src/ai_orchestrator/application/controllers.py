@@ -142,62 +142,93 @@ class IssueController:
 
     def _map_team_document_urls(
         self, project_identifier: Optional[str]
-    ) -> Dict[str, Optional[str]]:
+    ) -> Dict[str, str]:
         """
         Map team document URLs based on project identifier and environment variables.
 
-        Looks up the following environment variables:
+        All environment variables are REQUIRED. If any are missing, raises ValueError.
+
+        Looks up the following REQUIRED environment variables:
         - PROJECT_REPO_{PROJECT_IDENTIFIER}
         - TEAM_CONTRIBUTION_RULES_URL_{PROJECT_IDENTIFIER}
         - ARCHITECTURE_RULES_URL_{PROJECT_IDENTIFIER}
-        - PRD_URL_{PROJECT_IDENTIFIER} (optional)
-        - ARD_URL_{PROJECT_IDENTIFIER} (optional)
+        - PRD_URL_{PROJECT_IDENTIFIER}
+        - ARD_URL_{PROJECT_IDENTIFIER}
 
         Args:
             project_identifier: The normalized project identifier (e.g., "BACKEND")
 
         Returns:
-            Dictionary with mapped URLs:
+            Dictionary with mapped URLs (all required):
             - project_repo_url
             - team_contribution_rules_url
             - team_architecture_rules_url
             - prd_url
             - ard_url
+
+        Raises:
+            ValueError: If project_identifier is None or if any required environment variable is missing
         """
-        urls = {
-            "project_repo_url": None,
-            "team_contribution_rules_url": None,
-            "team_architecture_rules_url": None,
-            "prd_url": None,
-            "ard_url": None,
-        }
-
         if not project_identifier:
-            logger.debug("No project identifier provided, skipping URL mapping")
-            return urls
+            error_msg = "Project identifier is required but not found in issue summary or labels"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
-        # Map repository URL
+        missing_vars = []
+        urls = {}
+
+        # Map repository URL (REQUIRED)
         repo_env_var = f"PROJECT_REPO_{project_identifier}"
-        urls["project_repo_url"] = self._lookup_env_url(repo_env_var)
+        repo_url = self._lookup_env_url(repo_env_var)
+        if not repo_url:
+            missing_vars.append(repo_env_var)
+        else:
+            urls["project_repo_url"] = repo_url
 
-        # Map team contribution rules URL
+        # Map team contribution rules URL (REQUIRED)
         contribution_env_var = f"TEAM_CONTRIBUTION_RULES_URL_{project_identifier}"
-        urls["team_contribution_rules_url"] = self._lookup_env_url(contribution_env_var)
+        contribution_url = self._lookup_env_url(contribution_env_var)
+        if not contribution_url:
+            missing_vars.append(contribution_env_var)
+        else:
+            urls["team_contribution_rules_url"] = contribution_url
 
-        # Map architecture rules URL
+        # Map architecture rules URL (REQUIRED)
         architecture_env_var = f"ARCHITECTURE_RULES_URL_{project_identifier}"
-        urls["team_architecture_rules_url"] = self._lookup_env_url(architecture_env_var)
+        architecture_url = self._lookup_env_url(architecture_env_var)
+        if not architecture_url:
+            missing_vars.append(architecture_env_var)
+        else:
+            urls["team_architecture_rules_url"] = architecture_url
 
-        # Map PRD URL (optional)
+        # Map PRD URL (REQUIRED)
         prd_env_var = f"PRD_URL_{project_identifier}"
-        urls["prd_url"] = self._lookup_env_url(prd_env_var)
+        prd_url = self._lookup_env_url(prd_env_var)
+        if not prd_url:
+            missing_vars.append(prd_env_var)
+        else:
+            urls["prd_url"] = prd_url
 
-        # Map ARD URL (optional)
+        # Map ARD URL (REQUIRED)
         ard_env_var = f"ARD_URL_{project_identifier}"
-        urls["ard_url"] = self._lookup_env_url(ard_env_var)
+        ard_url = self._lookup_env_url(ard_env_var)
+        if not ard_url:
+            missing_vars.append(ard_env_var)
+        else:
+            urls["ard_url"] = ard_url
+
+        # If any required environment variables are missing, raise error
+        if missing_vars:
+            error_msg = (
+                f"Missing required environment variables for project '{project_identifier}': "
+                f"{', '.join(missing_vars)}. "
+                f"Please set all required environment variables for this project."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         logger.info(
-            "Mapped URLs for project '%s': repo=%s, contribution=%s, architecture=%s, prd=%s, ard=%s",
+            "Successfully mapped all URLs for project '%s': repo=%s, contribution=%s, architecture=%s, prd=%s, ard=%s",
             project_identifier,
             bool(urls["project_repo_url"]),
             bool(urls["team_contribution_rules_url"]),
