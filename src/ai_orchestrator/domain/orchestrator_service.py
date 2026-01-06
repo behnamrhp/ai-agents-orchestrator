@@ -70,7 +70,7 @@ class OrchestratorService:
 
         # Check for "Selected for Development" status
         if self._is_selected_for_development(issue.status):
-            logger.debug(
+            logger.info(
                 "Issue %s is in 'Selected for Development' status - assigning Developer role",
                 issue.key,
             )
@@ -83,7 +83,7 @@ class OrchestratorService:
 
         # Check for "to approve" status
         if self._is_to_approve(issue.status):
-            logger.debug(
+            logger.info(
                 "Issue %s is in 'to approve' status - assigning Architect role",
                 issue.key,
             )
@@ -95,7 +95,7 @@ class OrchestratorService:
             )
 
         # Default role for other statuses
-        logger.debug(
+        logger.info(
             "Issue %s is in status '%s' - assigning default Development Agent role",
             issue.key,
             issue.status,
@@ -125,7 +125,7 @@ class OrchestratorService:
 
         # Check for "Selected for Development" status
         if self._is_selected_for_development(issue.status):
-            logger.debug(
+            logger.info(
                 "Generating Developer instructions for issue %s",
                 issue.key,
             )
@@ -156,7 +156,7 @@ class OrchestratorService:
 
         # Check for "to approve" status
         elif self._is_to_approve(issue.status):
-            logger.debug(
+            logger.info(
                 "Generating Architect review instructions for issue %s",
                 issue.key,
             )
@@ -196,7 +196,7 @@ class OrchestratorService:
 
         # Default instructions for other statuses
         else:
-            logger.debug(
+            logger.info(
                 "Generating default instructions for issue %s with status '%s'",
                 issue.key,
                 issue.status,

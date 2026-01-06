@@ -60,6 +60,16 @@ class FastAPIApp:
             status_code=status.HTTP_200_OK,
         )
         async def issue_created_webhook(payload: Dict[str, Any]) -> Dict[str, Any]:
+            # Extract issue key for logging if available
+            issue_key = "unknown"
+            try:
+                issue = payload.get("issue", {})
+                if issue:
+                    issue_key = issue.get("key", "unknown")
+            except Exception:
+                pass
+            
+            logger.info("New webhook event received: issue-created for issue %s", issue_key)
             # TODO: add payload validation / schema
             self._issue_controller.handle_issue_created(payload)
             return {"status": "ok"}
@@ -69,6 +79,16 @@ class FastAPIApp:
             status_code=status.HTTP_200_OK,
         )
         async def issue_updated_webhook(payload: Dict[str, Any]) -> Dict[str, Any]:
+            # Extract issue key for logging if available
+            issue_key = "unknown"
+            try:
+                issue = payload.get("issue", {})
+                if issue:
+                    issue_key = issue.get("key", "unknown")
+            except Exception:
+                pass
+            
+            logger.info("New webhook event received: issue-updated for issue %s", issue_key)
             self._issue_controller.handle_issue_updated(payload)
             return {"status": "ok"}
 

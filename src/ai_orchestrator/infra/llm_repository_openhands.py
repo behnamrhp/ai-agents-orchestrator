@@ -291,11 +291,11 @@ class OpenHandsLlmRepository(LlmRepository):
         Returns:
             True if the provider is properly configured and marked as connected
         """
-        logger.debug("Checking MCP connection for provider '%s'", provider)
+        logger.info("Checking MCP connection for provider '%s'", provider)
 
         # Check if already marked as connected
         if self._mcp_connected.get(provider):
-            logger.debug("MCP provider '%s' is already marked as connected", provider)
+            logger.info("MCP provider '%s' is already marked as connected", provider)
             return True
 
         # Check environment variables
@@ -403,7 +403,7 @@ class OpenHandsLlmRepository(LlmRepository):
         try:
             # Send the prompt (already built by domain layer) to the agent
             self._conversation.send_message(prompt)
-            logger.debug("Message sent to OpenHands agent for issue %s", issue.key)
+            logger.info("Message sent to OpenHands agent for issue %s", issue.key)
 
             # Run the conversation - this triggers the agent to process the prompt
             self._conversation.run()
