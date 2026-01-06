@@ -89,6 +89,9 @@ class OpenHandsLlmRepository(LlmRepository):
         self._conversation: RemoteConversation | Any = None
         self._mcp_connected: dict[str, bool] = {}
 
+        # Validate LLM configuration early
+        self._validate_llm_config()
+
         if client is not None:
             # Allow injecting a pre-configured OpenHands conversation/client
             self._conversation = client
@@ -102,11 +105,32 @@ class OpenHandsLlmRepository(LlmRepository):
         # Only add api_key if provided (optional - may be configured in OpenHands)
         if llm_config.api_key:
             llm_kwargs["api_key"] = llm_config.api_key
+            logger.info("LLM API key configured for model '%s'", llm_config.model)
+        else:
+            logger.warning(
+                "LLM API key not provided. This may cause authentication errors. "
+                "Set LLM_API_KEY environment variable."
+            )
         # Only add base_url if provided (optional - uses provider default)
         if llm_config.base_url:
             llm_kwargs["base_url"] = llm_config.base_url
+            logger.debug("Using custom LLM base URL: %s", llm_config.base_url)
 
-        llm = LLM(**llm_kwargs)
+        try:
+            llm = LLM(**llm_kwargs)
+            logger.info("LLM initialized successfully with model '%s'", llm_config.model)
+        except Exception as e:
+            logger.error(
+                "Failed to initialize LLM with model '%s': %s. "
+                "Check LLM_API_KEY and LLM_MODEL environment variables.",
+                llm_config.model,
+                e,
+                exc_info=True,
+            )
+            raise RuntimeError(
+                f"Cannot initialize LLM: {e}. "
+                "Please check LLM_API_KEY and LLM_MODEL configuration."
+            ) from e
 
         # Build MCP servers configuration if available
         mcp_servers = self._build_mcp_servers_config()
@@ -207,6 +231,39 @@ class OpenHandsLlmRepository(LlmRepository):
         self._conversation = Conversation(agent=agent)
         self._workspace = None
         logger.info("Initialized OpenHands in simple conversation mode (no sandbox)")
+
+    def _validate_llm_config(self) -> None:
+        """
+        Validate LLM configuration and log warnings for missing values.
+        
+        Note: API key is optional in config (may be configured elsewhere),
+        but will cause authentication errors if not provided.
+        """
+        if not self._llm_config.api_key:
+            logger.warning(
+                "LLM_API_KEY is not set. This will cause authentication errors. "
+                "Please set the LLM_API_KEY environment variable with a valid API key. "
+                "For Deepseek, get your API key from https://platform.deepseek.com/"
+            )
+        elif not self._llm_config.api_key.strip():
+            logger.warning(
+                "LLM_API_KEY is set but empty. "
+                "Please provide a valid API key in the LLM_API_KEY environment variable."
+            )
+        
+        # Check if model name looks valid
+        if not self._llm_config.model or not self._llm_config.model.strip():
+            logger.warning(
+                "LLM_MODEL is not set or empty. Using default 'deepseek'. "
+                "For Deepseek, you may need to use 'deepseek/deepseek-chat' format. "
+                "Set LLM_MODEL environment variable to override."
+            )
+        
+        logger.debug(
+            "LLM configuration: model='%s', api_key_present=%s",
+            self._llm_config.model,
+            bool(self._llm_config.api_key),
+        )
 
     def _build_mcp_servers_config(self) -> dict[str, Any] | None:
         """
@@ -410,14 +467,36 @@ class OpenHandsLlmRepository(LlmRepository):
             logger.info("OpenHands agent run completed for issue %s", issue.key)
 
         except Exception as e:
+            error_str = str(e)
+            error_msg = f"Agent run failed for issue {issue.key}: {error_str}"
+            
+            # Provide specific guidance for authentication errors
+            if "Authentication" in error_str or "AuthenticationError" in error_str:
+                logger.error(
+                    "LLM Authentication failed for issue %s. "
+                    "Please check:\n"
+                    "  1. LLM_API_KEY is set correctly in environment variables\n"
+                    "  2. The API key is valid and not expired\n"
+                    "  3. The API key has proper permissions for the model '%s'\n"
+                    "  4. For Deepseek: Ensure you're using a valid Deepseek API key\n"
+                    "Error: %s",
+                    issue.key,
+                    self._llm_config.model,
+                    error_str,
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    f"LLM Authentication failed for issue {issue.key}. "
+                    f"Please verify LLM_API_KEY is set correctly and valid. "
+                    f"Model: {self._llm_config.model}, Error: {error_str}"
+                ) from e
+            
             logger.error(
                 "OpenHands agent run failed for issue %s: %s",
                 issue.key,
-                e,
+                error_str,
                 exc_info=True,
             )
-            raise RuntimeError(
-                f"Agent run failed for issue {issue.key}: {e}"
-            ) from e
+            raise RuntimeError(error_msg) from e
 
 
