@@ -8,46 +8,57 @@ This orchestrator enables AI-driven development workflows by:
 - Managing AI agents using OpenHands SDK
 - Integrating with external services via MCP (Jira, Confluence, etc.)
 - Providing a structured approach to human-AI collaboration
-- Supporting webhook-driven agent execution (coming soon)
+- Supporting webhook-driven agent execution
+
+## Tech Stack
+
+- **Language & Runtime**
+  - Python 3.10+
+  - Node.js 18+ (for MCP servers via `npx`)
+
+- **Core Backend Framework**
+  - FastAPI (webhook/API server)
+  - Uvicorn (ASGI server)
+
+- **AI & Orchestration**
+  - OpenHands SDK (`openhands-sdk`)
+  - OpenHands Workspace (`openhands-workspace`)
+  - MCP (Model Context Protocol) with `@sooperset/mcp-atlassian` for Jira & Confluence
+
+- **Configuration & Validation**
+  - Pydantic v2 (`pydantic`)
+  - `pydantic-settings`
+  - `python-dotenv` for `.env` loading
+
+- **Architecture & Patterns**
+  - Dependency Injector (`dependency-injector`) for DI/IoC
+  - Layered/domain-driven structure (`api`, `application`, `domain`, `infra`)
+
+- **HTTP & Integrations**
+  - `requests` for HTTP calls to external services
+  - Atlassian Jira & Confluence REST APIs (via MCP and direct HTTP)
+
+- **Packaging & Build**
+  - `pyproject.toml` with Hatchling (`hatchling`) as build backend
+
+- **Development & Quality**
+  - `pytest` for testing
+  - `black` for code formatting
+  - `ruff` for linting
+
+- **Runtime & Ops**
+  - Docker & Docker Compose (containerization and local orchestration)
+  - Structured logging configuration (Python `logging`)
 
 ## Architecture
+The code idea is automated AI-driven development is to separate AI agents as a team for reviewing and implementing the Human team ideas and human teams just design and review the process.
 
 ### Team Structure
 
-```
-┌─────────────────────────────────────────────┐
-│                HUMAN TEAMS                  │
-│        (Limited • Accountable • Decision)   │
-│                                             │
-│  ┌──────────────┐   ┌──────────────────┐   │
-│  │ Architecture │   │ Backend Team     │   │
-│  │ Team         │   │ (Humans)         │   │
-│  │ (Humans)     │   └──────────────────┘   │
-│  │              │   ┌──────────────────┐   │
-│  │ - Design     │   │ Web Front Team   │   │
-│  │ - Rules      │   │ (Humans)         │   │
-│  │ - Governance │   └──────────────────┘   │
-│  │ - Review     │   ┌──────────────────┐   │
-│  │ - Agent Ctrl │   │ App Front Team   │   │
-│  └──────────────┘   │ (Humans)         │   │
-│                     └──────────────────┘   │
-└─────────────────────────────────────────────┘
-                    ⬇ governs / supervises ⬇
-┌─────────────────────────────────────────────┐
-│                  AI TEAMS                   │
-│      (Unlimited • Parallel • Subordinate)   │
-│                                             │
-│  ⬢ Backend Agents        ⬢ Web Front Agents │
-│    (many, scalable)        (many, scalable) │
-│                                             │
-│  ⬢ App Front Agents      ⬢ Architecture    │
-│    (many, scalable)        Review Agents    │
-│                             (compliance)   │
-└─────────────────────────────────────────────┘
-```
-
+![Team Structure](./docs/assets/imgs/ai-driven-architecture.png)
 ### Workflow & Code Architecture
 
+- **ai-driven-development-sequence**: The sequence diagram of the ai driven development process. See [ai-driven-development-sequence](docs/architecture/ai-driven-development-sequence.puml) for the sequence diagram.
 - **Workflow Sequence**: The orchestrator manages AI agents through Jira webhooks. When tasks are moved between columns, the orchestrator automatically routes them to appropriate agents. See [Workflow Sequence Diagram](docs/architecture/workflow_sequence.md) for the end‑to‑end Jira/agent workflow.
 - **Project Code Architecture**: The service exposes a FastAPI app layer that receives Jira webhooks, delegates to a repository/orchestration layer, and uses an OpenHands client to talk to OpenHands and Atlassian MCP. See [Project Architecture](docs/architecture/project_architecture.md) for sequence and class diagrams of the code layout.
 
@@ -58,13 +69,16 @@ This orchestrator enables AI-driven development workflows by:
 - ✅ Configurable agent management
 - ✅ Security analyzer integration
 - ✅ Cost tracking
-- 🚧 Webhook support (Jira webhook integration - see workflow)
-- 🚧 Multi-agent orchestration (Development + Architecture agents)
+- ✅ Webhook support (Jira webhook integration - see workflow)
+- ✅ Multi-agent orchestration (Development + Architecture agents)
+- 🚧 Observability on each agent for pause, resume or pass tasks to sub-agents or other agents.
+- 🚧 Listen to git CI/CD and on CI issues make a loop to fix and continue on development with the same agent. 
+- 🚧 Connect architecture agent to Pipeline to review pr just after CI success.
 
 ## Prerequisites
 
 - Python 3.10+
-- Node.js 18+ (for MCP servers via npx)
+- Access to self-hosted OpenHands server
 - LLM API key (Anthropic, OpenAI, etc.)
 - Access to self-hosted Jira and Confluence instances
 
@@ -234,6 +248,25 @@ By default this will listen on `http://127.0.0.1:8000`. The application will aut
 - If webhook registration fails, the application will exit with an error. Ensure `WEBHOOK_BASE_URL` is publicly accessible and `WEBHOOK_ENABLED=true`.
 - For local development, use a tool like [ngrok](https://ngrok.com/) to expose your local server: `ngrok http 8000` and set `WEBHOOK_BASE_URL` to the ngrok URL.
 
+### Run with Docker / Docker Compose
+
+You can also run the orchestrator using Docker:
+
+```bash
+# Build and run with docker-compose
+docker compose up --build
+
+# Or, if your Docker uses the older syntax:
+docker-compose up --build
+```
+
+By default this will:
+- Build the application image from the provided `Dockerfile`
+- Start the FastAPI app defined in `docker-compose.yml`
+- Expose the webhook server on the port configured in the compose file (commonly `8000`)
+
+Make sure your `.env` is present in the project root so the container can load all required configuration.
+
 ### Classic Orchestrator Usage (optional)
 
 You can still use the lower‑level `AIOrchestrator` directly for experiments:
@@ -256,14 +289,10 @@ ai-orchestrator/
 ├── src/
 │   └── ai_orchestrator/
 │       ├── __init__.py
-│       ├── config.py             # Configuration management
-│       ├── orchestrator.py       # Low‑level AIOrchestrator (OpenHands SDK wrapper)
-│       ├── app.py                # FastAPI app + routes for Jira webhooks
-│       ├── domain.py             # Domain models (Issue, IssueEventDTO)
-│       ├── interfaces.py         # IIssueRepository, IOpenHandsClient
-│       ├── repository.py         # IssueRepositoryImpl orchestration layer
-│       ├── infra_openhands.py    # OpenHandsClient (IOpenHandsClient implementation)
-│       └── services.py           # McpStartupService and other services
+│       ├── api/                  # Webhook/API surface (e.g. Jira webhooks)
+│       ├── application/          # Application controllers / use-case orchestration
+│       ├── domain/               # Core domain models, services, repositories
+│       └── infra/                # FastAPI app, config, DI, Jira client, LLM repo, logging
 ├── examples/
 │   └── basic_mcp_connection.py
 ├── docs/

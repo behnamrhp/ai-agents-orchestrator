@@ -1,10 +1,10 @@
 # Workflow Sequence Diagram
 
-This document describes the detailed workflow sequence for AI-driven task management using Jira webhooks and the AI Orchestrator.
-
 ## Overview
 
 The workflow enables automatic task assignment and review through Jira webhooks. When tasks are moved between columns, the Orchestrator automatically routes them to appropriate AI agents based on project/team naming conventions.
+
+> Note: In this version of the workflow, the architecture agent is not connected to the pipeline to review pr just after CI success and both agents just connected to jira to listen to task status events.
 
 ## Sequence Diagram
 

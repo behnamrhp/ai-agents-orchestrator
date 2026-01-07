@@ -1,4 +1,6 @@
-## Project Architecture
+# Project Architecture
+
+## Overview
 
 This document describes the high-level code architecture of the AI Orchestrator service that:
 

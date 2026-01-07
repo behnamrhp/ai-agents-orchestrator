@@ -1,0 +1,45 @@
+@startuml ai driven development sequence diagram
+title ai driven development sequence diagram
+actor "Architecture Team\n(Human)" as ArchHuman
+actor "Dev Team\n(Human)" as DevHuman
+
+participant "Document Center" as Docs
+participant "Jira" as Jira
+participant "Developer Agent\n<<agent>>" as DevAgent
+participant "Architecture Agent\n<<agent>>" as ArchAgent
+participant "Git" as Git
+participant "CI/CD" as CI
+
+ArchHuman -> Docs : Publish PRD / ARD / Contracts
+ArchHuman -> Jira : Create Epics & Stories\nAttach Docs
+
+DevHuman -> Jira : Refine Stories\nSubtasks & Estimation
+DevHuman -> Jira : Move to\nSelected for Development
+
+Jira -> DevAgent : Story Available
+DevAgent -> Docs : Load Specifications
+DevAgent -> Git : Create Branch\nImplement Code
+DevAgent -> Git : Open PR
+Git -> CI : Run Pipeline
+
+Git -> ArchAgent : PR Created / Updated
+ArchAgent -> Docs : Spec Compliance Check
+ArchAgent -> CI : Verify Results
+
+alt Violations Found
+    ArchAgent -> Git : Request Changes
+    ArchAgent -> Jira : Move to\nSelected for Development
+    Jira -> DevAgent : Rework Trigger
+else Approved
+    ArchAgent -> Jira : Move to\nTo Human Review
+end
+
+DevHuman -> Git : Final Review\nManual Testing
+alt Rejected by Human
+    DevHuman -> Jira : Move to\nSelected for Development
+else Accepted
+    DevHuman -> Jira : Done
+end
+
+@enduml
+
